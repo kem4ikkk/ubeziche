@@ -1,0 +1,46 @@
+{
+  // Интеграция Godot с VS Code.
+  // ВАЖНО: если обновишь Godot — поправь пути к .exe ниже под новую версию.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // ▶ Запуск игры. Ctrl+Shift+B. Вывод print() и ошибки — в терминале VS Code.
+      "label": "▶ Запустить игру",
+      "type": "process",
+      "command": "D:/Godot/Godot_v4.6.3-stable_win64_console.exe",
+      "args": ["--path", "${workspaceFolder}"],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      // 🔍 "Билд"-проверка: запускает проект в фоне на пару кадров и ловит ошибки парсинга.
+      "label": "🔍 Проверить проект (ошибки)",
+      "type": "process",
+      "command": "D:/Godot/Godot_v4.6.3-stable_win64_console.exe",
+      "args": ["--headless", "--quit-after", "5", "--path", "${workspaceFolder}"],
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      // ✏️ Открыть проект в редакторе Godot (GUI).
+      "label": "✏️ Открыть редактор Godot",
+      "type": "process",
+      "command": "D:/Godot/Godot_v4.6.3-stable_win64.exe",
+      "args": ["--editor", "--path", "${workspaceFolder}"],
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      // 📸 Прогон с авто-скриншотом и дампом состояния (для отладки с Claude).
+      // Откроет окно игры на пару секунд, сохранит debug/last_run.png и закроется.
+      "label": "📸 Прогон + скриншот (для Claude)",
+      "type": "process",
+      "command": "D:/Godot/Godot_v4.6.3-stable_win64_console.exe",
+      "args": ["--path", "${workspaceFolder}", "--", "--capture"],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

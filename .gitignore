@@ -13,3 +13,6 @@ Thumbs.db
 
 # Claude Code local settings (personal)
 .claude/settings.local.json
+
+# Debug-прогоны (скриншоты для Claude)
+debug/
