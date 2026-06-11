@@ -41,12 +41,26 @@ func _run_capture(args: PackedStringArray) -> void:
 			player.shoot()
 			await get_tree().create_timer(0.2).timeout
 
-	# 3) Даём врагам подойти/поатаковать оставшееся время.
-	var rest: float = maxf(total - 1.5, 0.5)
+	# 3) Даём врагам подойти/поатаковать + ресурсам собраться.
+	var rest: float = maxf(total - 2.5, 0.5)
 	await get_tree().create_timer(rest).timeout
-	_dump_state("ПОСЛЕ действий")
+	_dump_state("ПОСЛЕ выстрелов (враги приближаются)")
 
-	# 4) Снимок экрана (ждём отрисовку кадра).
+	# 4) Телепортируем игрока к ресурсам (для тестирования).
+	if is_instance_valid(player) and player is Node3D:
+		print("CLAUDE: телепортирую игрока к ресурсам")
+		(player as Node3D).global_position = Vector3(5, 1, 5)
+		await get_tree().create_timer(0.5).timeout
+		_dump_state("ПОСЛЕ телепорта (собираю ресурсы)")
+
+	# 5) Попробуем скрафтить если достаточно ресурсов.
+	if InventorySystem.get_resource("wood") >= 2:
+		print("CLAUDE: крафтим стену (2 дерева → 1 стена)")
+		CraftSystem.craft("wall")
+
+	_dump_state("ПОСЛЕ крафта")
+
+	# 6) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var abs_dir := ProjectSettings.globalize_path(OUT_DIR)
@@ -73,4 +87,8 @@ func _dump_state(label: String) -> void:
 	else:
 		print("  player: (нет)")
 	print("  enemies: ", get_tree().get_nodes_in_group("enemy").size())
+	# Показываем инвентарь
+	for resource_type in InventorySystem.inventory:
+		var amount = InventorySystem.inventory[resource_type]
+		print("  inventory[%s]: %d" % [resource_type, amount])
 	print("CLAUDE_STATE_END")

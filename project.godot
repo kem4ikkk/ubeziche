@@ -21,6 +21,8 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 [autoload]
 
 DebugCapture="*res://scripts/debug_capture.gd"
+InventorySystem="*res://scripts/inventory_system.gd"
+CraftSystem="*res://scripts/craft_system.gd"
 
 [rendering]
 
