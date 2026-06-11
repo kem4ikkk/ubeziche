@@ -1,0 +1,15 @@
+# Служебная папка Godot 4 (кэш импорта — не храним в git)
+.godot/
+
+# Экспортированные сборки игры
+/build/
+*.exe
+*.pck
+*.zip
+
+# Системные файлы
+Thumbs.db
+.DS_Store
+
+# Claude Code local settings (personal)
+.claude/settings.local.json
