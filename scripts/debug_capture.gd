@@ -110,6 +110,9 @@ func _dump_state(label: String) -> void:
 	if is_instance_valid(day_night):
 		var phase: String = "ночь" if day_night.is_night else "день"
 		print("  phase: ", phase, " (осталось ", snappedf(day_night.get_phase_time_left(), 0.1), " c)")
+	var game_state := get_tree().get_first_node_in_group("game_state_manager")
+	if is_instance_valid(game_state):
+		print("  game_over: ", game_state.is_game_over, ", paused: ", get_tree().paused)
 	# Показываем инвентарь
 	for resource_type in InventorySystem.inventory:
 		var amount = InventorySystem.inventory[resource_type]

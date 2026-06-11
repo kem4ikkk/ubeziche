@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_zombie"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/wave_manager.gd" id="4_wave"]
 [ext_resource type="PackedScene" path="res://scenes/resource_pickup.tscn" id="5_pickup"]
 [ext_resource type="Script" path="res://scripts/day_night_cycle.gd" id="6_daynight"]
+[ext_resource type="Script" path="res://scripts/game_state_manager.gd" id="7_gamestate"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -60,6 +61,12 @@ night_duration = 15.0
 directional_light_path = NodePath("../DirectionalLight3D")
 world_environment_path = NodePath("../WorldEnvironment")
 wave_manager_path = NodePath("../WaveManager")
+
+[node name="GameStateManager" type="Node" parent="."]
+script = ExtResource("7_gamestate")
+victory_waves = 5
+wave_manager_path = NodePath("../WaveManager")
+player_path = NodePath("../Player")
 
 [node name="SpawnPoints" type="Node3D" parent="WaveManager"]
 

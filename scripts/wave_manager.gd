@@ -5,6 +5,8 @@ extends Node3D
 ##
 ## Точки спавна — дочерние узлы Marker3D под узлом "SpawnPoints".
 
+signal wave_cleared(wave_number: int)
+
 @export var zombie_scene: PackedScene
 @export var first_wave_count: int = 3        # зомби в 1-й волне
 @export var count_increment: int = 2         # +N зомби каждую следующую волну
@@ -57,3 +59,4 @@ func _on_zombie_removed() -> void:
 
 func _on_wave_cleared() -> void:
 	print("Волна ", current_wave, " зачищена! Следующая начнётся ночью")
+	wave_cleared.emit(current_wave)
