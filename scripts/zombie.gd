@@ -29,12 +29,17 @@ func _physics_process(delta: float) -> void:
 	if _dead:
 		return
 
+	# Сцена могла перезагрузиться (смерть игрока) в этом же кадре —
+	# не трогаем физику, иначе move_and_slide() упадёт с ошибкой.
+	if not is_inside_tree():
+		return
+
 	# Гравитация — чтобы зомби «прилипал» к земле.
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
-	# Если игрок ещё не найден или погиб — стоим и пробуем найти заново.
-	if not is_instance_valid(_player):
+	# Если игрок ещё не найден, погиб или сцена перезагружается — стоим и пробуем найти заново.
+	if not is_instance_valid(_player) or not _player.is_inside_tree():
 		_player = get_tree().get_first_node_in_group("player") as Node3D
 		velocity.x = 0.0
 		velocity.z = 0.0

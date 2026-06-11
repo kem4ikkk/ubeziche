@@ -1,15 +1,13 @@
 extends Node3D
 ## Менеджер волн: спавнит зомби волнами с нарастающей сложностью.
-## Волна считается зачищенной, когда все её зомби уничтожены; затем через
-## паузу начинается следующая — с бо́льшим числом врагов.
+## Волна запускается извне (см. `start_wave`) — в игре её вызывает
+## `DayNightCycle` с наступлением ночи (Этап 3.6).
 ##
 ## Точки спавна — дочерние узлы Marker3D под узлом "SpawnPoints".
 
 @export var zombie_scene: PackedScene
 @export var first_wave_count: int = 3        # зомби в 1-й волне
 @export var count_increment: int = 2         # +N зомби каждую следующую волну
-@export var initial_delay: float = 1.0       # пауза перед самой первой волной
-@export var time_between_waves: float = 4.0  # пауза между волнами
 @export var spawn_interval: float = 0.5      # пауза между появлением зомби в волне
 
 var current_wave: int = 0
@@ -19,16 +17,11 @@ var _spawning: bool = false
 @onready var _spawn_points: Array[Node] = $SpawnPoints.get_children()
 
 
-func _ready() -> void:
-	_start_next_wave_after(initial_delay)
-
-
-func _start_next_wave_after(delay: float) -> void:
-	await get_tree().create_timer(delay).timeout
-	_start_wave()
-
-
-func _start_wave() -> void:
+## Запустить следующую волну. Если предыдущая ещё не зачищена — ничего не делает.
+func start_wave() -> void:
+	if _spawning or _zombies_alive > 0:
+		print("Волна уже идёт — пропускаем запуск новой")
+		return
 	current_wave += 1
 	var count := first_wave_count + (current_wave - 1) * count_increment
 	print("Волна ", current_wave, " — зомби: ", count)
@@ -63,5 +56,4 @@ func _on_zombie_removed() -> void:
 
 
 func _on_wave_cleared() -> void:
-	print("Волна ", current_wave, " зачищена! Следующая через ", time_between_waves, " c")
-	_start_next_wave_after(time_between_waves)
+	print("Волна ", current_wave, " зачищена! Следующая начнётся ночью")

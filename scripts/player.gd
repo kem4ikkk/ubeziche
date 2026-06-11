@@ -146,4 +146,7 @@ func get_health() -> float:
 
 func _on_died() -> void:
 	print("ИГРОК ПОГИБ — перезапуск сцены")
-	get_tree().reload_current_scene()
+	# Откладываем перезагрузку до конца кадра — иначе зомби, чей
+	# _physics_process ещё не отработал в этом кадре, обратится к уже
+	# освобождённым узлам и упадёт с ошибкой.
+	get_tree().call_deferred("reload_current_scene")

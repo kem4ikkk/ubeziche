@@ -33,6 +33,12 @@ func _run_capture(args: PackedStringArray) -> void:
 	await get_tree().create_timer(0.5).timeout
 	_dump_state("ДО действий")
 
+	# 1.5) Запускаем волну вручную (Этап 3.6: волны теперь стартуют ночью,
+	# но в коротком прогоне ждать наступления ночи не успеваем).
+	var wave_manager := get_tree().current_scene.get_node_or_null("WaveManager")
+	if wave_manager != null and wave_manager.has_method("start_wave"):
+		wave_manager.start_wave()
+
 	# 2) Имитируем стрельбу вперёд — проверяем урон и смерть врага.
 	var player := get_tree().get_first_node_in_group("player")
 	if is_instance_valid(player) and player.has_method("shoot"):
@@ -100,6 +106,10 @@ func _dump_state(label: String) -> void:
 		print("  player: (нет)")
 	print("  enemies: ", get_tree().get_nodes_in_group("enemy").size())
 	print("  buildings: ", get_tree().get_nodes_in_group("building").size())
+	var day_night := get_tree().get_first_node_in_group("day_night_cycle")
+	if is_instance_valid(day_night):
+		var phase: String = "ночь" if day_night.is_night else "день"
+		print("  phase: ", phase, " (осталось ", snappedf(day_night.get_phase_time_left(), 0.1), " c)")
 	# Показываем инвентарь
 	for resource_type in InventorySystem.inventory:
 		var amount = InventorySystem.inventory[resource_type]

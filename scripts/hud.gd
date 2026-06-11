@@ -4,6 +4,9 @@ extends CanvasLayer
 
 @onready var inventory_label: Label = $InventoryLabel
 @onready var health_label: Label = $HealthLabel
+@onready var phase_label: Label = $PhaseLabel
+
+var _day_night_cycle: Node
 
 
 func _ready() -> void:
@@ -15,6 +18,17 @@ func _ready() -> void:
 		var health: HealthComponent = player.get_node("HealthComponent")
 		health.health_changed.connect(_on_health_changed)
 		_on_health_changed(health.current_health, health.max_health)
+
+
+func _process(_delta: float) -> void:
+	# DayNightCycle может ещё не быть готов в момент _ready() HUD-а — ищем лениво.
+	if not is_instance_valid(_day_night_cycle):
+		_day_night_cycle = get_tree().get_first_node_in_group("day_night_cycle")
+
+	if is_instance_valid(_day_night_cycle):
+		var phase_name := "Ночь" if _day_night_cycle.is_night else "День"
+		var time_left := ceili(_day_night_cycle.get_phase_time_left())
+		phase_label.text = "%s: %d" % [phase_name, time_left]
 
 
 func _on_inventory_changed(inventory: Dictionary) -> void:
