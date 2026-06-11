@@ -60,7 +60,19 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	_dump_state("ПОСЛЕ крафта")
 
-	# 6) Снимок экрана (ждём отрисовку кадра).
+	# 6) Строим стену (Этап 3.5): включаем режим постройки и ставим стену.
+	if is_instance_valid(player) and player.has_node("BuildSystem"):
+		var build_system := player.get_node("BuildSystem")
+		print("CLAUDE: включаю режим постройки")
+		build_system.toggle()
+		await get_tree().create_timer(0.3).timeout  # ждём кадр для луча/призрака
+		var placed: bool = build_system.try_place()
+		print("CLAUDE: построена стена: ", placed)
+		await get_tree().create_timer(0.2).timeout
+
+	_dump_state("ПОСЛЕ постройки")
+
+	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var abs_dir := ProjectSettings.globalize_path(OUT_DIR)
@@ -87,6 +99,7 @@ func _dump_state(label: String) -> void:
 	else:
 		print("  player: (нет)")
 	print("  enemies: ", get_tree().get_nodes_in_group("enemy").size())
+	print("  buildings: ", get_tree().get_nodes_in_group("building").size())
 	# Показываем инвентарь
 	for resource_type in InventorySystem.inventory:
 		var amount = InventorySystem.inventory[resource_type]

@@ -20,6 +20,7 @@ extends CharacterBody3D
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
 @onready var health: HealthComponent = $HealthComponent
+@onready var build_system: Node3D = $BuildSystem
 
 # Берём гравитацию из настроек проекта (по умолчанию 9.8).
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -54,9 +55,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Левая кнопка мыши.
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			shoot()                                       # курсор захвачен → стреляем
+			if build_system.build_mode:
+				build_system.try_place()                  # в режиме постройки — строим стену
+			else:
+				shoot()                                    # иначе — стреляем
 		else:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED  # иначе — заново захватываем курсор
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED  # заново захватываем курсор
+
+	# B — переключить режим постройки.
+	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
+		build_system.toggle()
 
 	# Esc — отпустить курсор.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:

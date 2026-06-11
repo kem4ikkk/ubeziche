@@ -1,7 +1,9 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/build_system.gd" id="3_build"]
+[ext_resource type="PackedScene" path="res://scenes/wall.tscn" id="4_wall"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.5
@@ -34,3 +36,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
 max_health = 100.0
+
+[node name="BuildSystem" type="Node3D" parent="."]
+script = ExtResource("3_build")
+wall_scene = ExtResource("4_wall")
