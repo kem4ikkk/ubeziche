@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/zombie.gd" id="1_zombie"]
 [ext_resource type="Script" path="res://scripts/health_component.gd" id="2_health"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
@@ -12,10 +12,10 @@ radius = 0.5
 height = 2.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
-albedo_color = Color(0.2, 0.4, 0.8, 1)
+albedo_color = Color(0.35, 0.6, 0.2, 1)
 
-[node name="Player" type="CharacterBody3D"]
-script = ExtResource("1_player")
+[node name="Zombie" type="CharacterBody3D"]
+script = ExtResource("1_zombie")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
@@ -26,9 +26,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("CapsuleMesh_1")
 surface_material_override/0 = SubResource("StandardMaterial3D_1")
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
-
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
-max_health = 100.0
+max_health = 30.0
