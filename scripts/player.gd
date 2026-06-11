@@ -66,6 +66,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		build_system.toggle()
 
+	# C — скрафтить стену (2 дерева → 1 стена).
+	if event is InputEventKey and event.pressed and event.keycode == KEY_C:
+		if CraftSystem.craft("wall"):
+			print("Скрафтили стену")
+		else:
+			print("Не хватает ресурсов для крафта стены")
+
 	# Esc — отпустить курсор.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
