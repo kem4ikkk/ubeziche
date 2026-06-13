@@ -6,6 +6,7 @@ extends CharacterBody3D
 ##   Мышь  — обзор
 ##   Space — прыжок
 ##   ЛКМ   — выстрел (если курсор захвачен) / захватить курсор
+##   R     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
 ##   Esc   — отпустить курсор
 
 # Параметры можно менять прямо в редакторе (значок справа от ноды).
@@ -16,6 +17,11 @@ extends CharacterBody3D
 # Стрельба
 @export var damage: float = 10.0          # урон за выстрел
 @export var shoot_range: float = 100.0    # дальность выстрела, м
+
+# Ремонт построек
+@export var repair_range: float = 4.0     # дистанция ремонта, м (с запасом на привязку к сетке)
+@export var repair_amount: float = 15.0   # сколько HP восстанавливает ремонт
+const REPAIR_COST := {"wood": 1}
 
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
@@ -72,6 +78,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			print("Скрафтили стену")
 		else:
 			print("Не хватает ресурсов для крафта стены")
+
+	# R — отремонтировать постройку, на которую смотрим.
+	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
+		repair_target()
 
 	# Esc — отпустить курсор.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -132,6 +142,41 @@ func shoot() -> void:
 		print("Попадание: ", collider.name)
 	else:
 		print("Мимо")
+
+
+## Ремонт ближайшей постройки (стены) рядом с игроком (Этап 4.3).
+## Стены низкие (1 м), а камера на высоте 1.6 м — горизонтальный луч
+## по ним не попадает, поэтому ищем по дистанции, а не по лучу.
+## Стоит 1 дерево, восстанавливает repair_amount HP.
+func repair_target() -> void:
+	var nearest: Node3D = null
+	var nearest_dist := repair_range
+	for node in get_tree().get_nodes_in_group("building"):
+		if not (node is Node3D) or not node.has_method("repair"):
+			continue
+		var dist := (node as Node3D).global_position.distance_to(global_position)
+		if dist <= nearest_dist:
+			nearest = node
+			nearest_dist = dist
+
+	if not is_instance_valid(nearest):
+		print("CLAUDE: нечего ремонтировать")
+		return
+
+	if nearest.has_method("is_full_health") and nearest.is_full_health():
+		print("CLAUDE: постройка уже на максимум HP")
+		return
+
+	for resource_type in REPAIR_COST:
+		if InventorySystem.get_resource(resource_type) < REPAIR_COST[resource_type]:
+			print("CLAUDE: не хватает ресурсов для ремонта")
+			return
+
+	for resource_type in REPAIR_COST:
+		InventorySystem.use_resource(resource_type, REPAIR_COST[resource_type])
+
+	nearest.repair(repair_amount)
+	print("Постройка отремонтирована (+", repair_amount, " HP)")
 
 
 ## Урон по игроку (например, от зомби).

@@ -23,3 +23,10 @@ shape = SubResource("BoxShape3D_1")
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
 max_health = 50.0
+
+[node name="HPLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+billboard = 1
+no_depth_test = true
+font_size = 32
+text = "50 / 50"

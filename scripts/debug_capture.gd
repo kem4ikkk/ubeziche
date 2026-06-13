@@ -78,6 +78,19 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	_dump_state("ПОСЛЕ постройки")
 
+	# 6.5) Повреждаем и ремонтируем стену (Этап 4.3).
+	var wall := get_tree().get_first_node_in_group("building")
+	if is_instance_valid(wall) and wall.has_method("take_damage"):
+		print("CLAUDE: повреждаю стену (-20 HP)")
+		wall.take_damage(20.0)
+		await get_tree().create_timer(0.2).timeout
+		print("CLAUDE: ремонтирую стену")
+		if is_instance_valid(player) and player.has_method("repair_target"):
+			player.repair_target()
+		await get_tree().create_timer(0.2).timeout
+
+	_dump_state("ПОСЛЕ ремонта стены")
+
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
@@ -106,6 +119,10 @@ func _dump_state(label: String) -> void:
 		print("  player: (нет)")
 	print("  enemies: ", get_tree().get_nodes_in_group("enemy").size())
 	print("  buildings: ", get_tree().get_nodes_in_group("building").size())
+	var wall := get_tree().get_first_node_in_group("building")
+	if is_instance_valid(wall) and wall.has_node("HealthComponent"):
+		var wall_health: HealthComponent = wall.get_node("HealthComponent")
+		print("  wall_hp: ", wall_health.current_health, " / ", wall_health.max_health)
 	var day_night := get_tree().get_first_node_in_group("day_night_cycle")
 	if is_instance_valid(day_night):
 		var phase: String = "ночь" if day_night.is_night else "день"
