@@ -91,6 +91,19 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	_dump_state("ПОСЛЕ ремонта стены")
 
+	# 6.6) Спавним зомби-танка вручную для проверки (Этап 4.4) — обычно
+	# танки появляются с волны 2, но в коротком прогоне до неё не доходит.
+	if wave_manager != null and wave_manager.tank_zombie_scene != null:
+		print("CLAUDE: спавню зомби-танка для проверки")
+		var tank: Node = wave_manager.tank_zombie_scene.instantiate()
+		get_tree().current_scene.add_child(tank)
+		(tank as Node3D).global_position = Vector3(0, 1, -5)
+		await get_tree().create_timer(0.2).timeout
+		if tank.has_method("get_health"):
+			print("  tank_hp: ", tank.get_health())
+
+	_dump_state("ПОСЛЕ спавна танка")
+
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()

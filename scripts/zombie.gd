@@ -4,12 +4,16 @@ extends CharacterBody3D
 ## Навигацию (NavMesh) пока не используем — идём напрямую к игроку.
 ## Если на пути встаёт постройка (баррикада/стена) и зомби не может
 ## до неё дотянуться до игрока — атакует постройку (Этап 4.2).
+## Этот же скрипт используется и для зомби-танка (Этап 4.4) — отличия
+## задаются экспортами в сцене (scenes/zombie_tank.tscn): больше HP,
+## меньше скорость, сильнее урон по постройкам, больше радиус их атаки.
 
 @export var speed: float = 2.5            # скорость зомби (медленнее игрока)
-@export var attack_damage: float = 8.0    # урон за удар
+@export var attack_damage: float = 8.0    # урон за удар по игроку
 @export var attack_range: float = 1.8     # дистанция, с которой бьёт
 @export var attack_cooldown: float = 1.0  # пауза между ударами, с
 @export var building_attack_range: float = 2.0  # дистанция атаки построек
+@export var building_attack_damage: float = 8.0  # урон за удар по постройке (Этап 4.4: танк бьёт сильнее)
 
 @onready var health: HealthComponent = $HealthComponent
 
@@ -65,8 +69,8 @@ func _physics_process(delta: float) -> void:
 		_attack_timer -= delta
 		if _attack_timer <= 0.0:
 			_attack_timer = attack_cooldown
-			blocker.take_damage(attack_damage)
-			print("Зомби атакует постройку (-", attack_damage, " HP)")
+			blocker.take_damage(building_attack_damage)
+			print("Зомби атакует постройку (-", building_attack_damage, " HP)")
 		move_and_slide()
 		return
 

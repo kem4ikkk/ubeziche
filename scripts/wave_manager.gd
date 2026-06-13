@@ -12,6 +12,11 @@ signal wave_cleared(wave_number: int)
 @export var count_increment: int = 2         # +N зомби каждую следующую волну
 @export var spawn_interval: float = 0.5      # пауза между появлением зомби в волне
 
+# Танк (Этап 4.4): больше HP, медленнее, сильнее бьёт по постройкам.
+@export var tank_zombie_scene: PackedScene
+@export var tank_starting_wave: int = 2      # с какой волны появляются танки
+@export var tanks_per_wave: int = 1          # сколько танков добавляется к волне
+
 var current_wave: int = 0
 var _zombies_alive: int = 0
 var _spawning: bool = false
@@ -26,10 +31,16 @@ func start_wave() -> void:
 		return
 	current_wave += 1
 	var count := first_wave_count + (current_wave - 1) * count_increment
-	print("Волна ", current_wave, " — зомби: ", count)
+	var tank_count := 0
+	if tank_zombie_scene != null and current_wave >= tank_starting_wave:
+		tank_count = tanks_per_wave
+	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count)
 	_spawning = true
 	for i in count:
-		_spawn_zombie()
+		_spawn_zombie(zombie_scene)
+		await get_tree().create_timer(spawn_interval).timeout
+	for i in tank_count:
+		_spawn_zombie(tank_zombie_scene)
 		await get_tree().create_timer(spawn_interval).timeout
 	_spawning = false
 	# Если игрок успел перебить всех ещё во время спавна.
@@ -37,10 +48,10 @@ func start_wave() -> void:
 		_on_wave_cleared()
 
 
-func _spawn_zombie() -> void:
-	if zombie_scene == null or _spawn_points.is_empty():
+func _spawn_zombie(scene: PackedScene) -> void:
+	if scene == null or _spawn_points.is_empty():
 		return
-	var zombie := zombie_scene.instantiate()
+	var zombie := scene.instantiate()
 	get_parent().add_child(zombie)
 	var point := _spawn_points[randi() % _spawn_points.size()] as Node3D
 	(zombie as Node3D).global_position = point.global_position
