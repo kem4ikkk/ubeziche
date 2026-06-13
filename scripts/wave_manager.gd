@@ -10,12 +10,17 @@ signal wave_cleared(wave_number: int)
 @export var zombie_scene: PackedScene
 @export var first_wave_count: int = 3        # зомби в 1-й волне
 @export var count_increment: int = 2         # +N зомби каждую следующую волну
-@export var spawn_interval: float = 0.5      # пауза между появлением зомби в волне
+@export var spawn_interval: float = 0.5      # пауза между появлением зомби в волне (1-я ночь)
+
+# Этап 4.5: нарастание сложности между ночами.
+@export var min_spawn_interval: float = 0.15     # минимальная пауза между спавнами
+@export var spawn_interval_decrease: float = 0.03  # на сколько уменьшается пауза за каждую следующую ночь
 
 # Танк (Этап 4.4): больше HP, медленнее, сильнее бьёт по постройкам.
 @export var tank_zombie_scene: PackedScene
 @export var tank_starting_wave: int = 2      # с какой волны появляются танки
-@export var tanks_per_wave: int = 1          # сколько танков добавляется к волне
+@export var tanks_per_wave: int = 1          # танков в волне, когда они появляются впервые
+@export var tank_wave_step: int = 2          # каждые N ночей после старта танков +1 танк (Этап 4.5.2)
 
 var current_wave: int = 0
 var _zombies_alive: int = 0
@@ -33,15 +38,17 @@ func start_wave() -> void:
 	var count := first_wave_count + (current_wave - 1) * count_increment
 	var tank_count := 0
 	if tank_zombie_scene != null and current_wave >= tank_starting_wave:
-		tank_count = tanks_per_wave
-	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count)
+		tank_count = tanks_per_wave + (current_wave - tank_starting_wave) / tank_wave_step
+	# Этап 4.5.1: с каждой следующей ночью зомби появляются чаще.
+	var interval: float = maxf(min_spawn_interval, spawn_interval - (current_wave - 1) * spawn_interval_decrease)
+	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count, ", интервал спавна: ", interval)
 	_spawning = true
 	for i in count:
 		_spawn_zombie(zombie_scene)
-		await get_tree().create_timer(spawn_interval).timeout
+		await get_tree().create_timer(interval).timeout
 	for i in tank_count:
 		_spawn_zombie(tank_zombie_scene)
-		await get_tree().create_timer(spawn_interval).timeout
+		await get_tree().create_timer(interval).timeout
 	_spawning = false
 	# Если игрок успел перебить всех ещё во время спавна.
 	if _zombies_alive <= 0:
