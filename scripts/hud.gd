@@ -11,6 +11,7 @@ extends CanvasLayer
 
 var _day_night_cycle: Node
 var _game_state_manager: Node
+var _weapon_name: String = "Пистолет"
 
 
 func _ready() -> void:
@@ -26,6 +27,9 @@ func _ready() -> void:
 	if is_instance_valid(player) and player.has_signal("ammo_changed"):
 		player.ammo_changed.connect(_on_ammo_changed)
 		_on_ammo_changed(player.current_ammo, player.magazine_size)
+	if is_instance_valid(player) and player.has_signal("weapon_changed"):
+		player.weapon_changed.connect(_on_weapon_changed)
+		_on_weapon_changed(player.weapons[player.current_weapon_index].name)
 
 
 func _process(_delta: float) -> void:
@@ -62,4 +66,11 @@ func _on_health_changed(current: float, maximum: float) -> void:
 
 
 func _on_ammo_changed(current: int, magazine: int) -> void:
-	ammo_label.text = "Патроны: %d / %d" % [current, magazine]
+	ammo_label.text = "%s — Патроны: %d / %d" % [_weapon_name, current, magazine]
+
+
+func _on_weapon_changed(weapon_name: String) -> void:
+	_weapon_name = weapon_name
+	var player := get_tree().get_first_node_in_group("player")
+	if is_instance_valid(player):
+		_on_ammo_changed(player.current_ammo, player.magazine_size)

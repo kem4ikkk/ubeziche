@@ -73,6 +73,23 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(player.reload_time + 0.2).timeout
 		print("  player_ammo после перезарядки: ", player.current_ammo, " / ", player.magazine_size)
 
+	# 4.6) Виды оружия (Этап 4.6.2): переключаемся на дробовик и проверяем
+	# его параметры/обойму, затем возвращаемся на пистолет.
+	if is_instance_valid(player) and player.has_method("switch_weapon"):
+		print("CLAUDE: переключаюсь на дробовик")
+		player.switch_weapon(1)
+		print("  оружие: ", player.weapons[player.current_weapon_index].name,
+				", урон: ", player.damage, ", обойма: ", player.current_ammo, " / ", player.magazine_size,
+				", дальность: ", player.shoot_range)
+		print("CLAUDE: выстрел из дробовика")
+		player.shoot()
+		await get_tree().create_timer(0.1).timeout
+		print("  обойма дробовика после выстрела: ", player.current_ammo, " / ", player.magazine_size)
+		print("CLAUDE: переключаюсь обратно на пистолет")
+		player.switch_weapon(0)
+		print("  оружие: ", player.weapons[player.current_weapon_index].name,
+				", обойма: ", player.current_ammo, " / ", player.magazine_size)
+
 	# 5) Попробуем скрафтить если достаточно ресурсов.
 	if InventorySystem.get_resource("wood") >= 2:
 		print("CLAUDE: крафтим стену (2 дерева → 1 стена)")
@@ -144,6 +161,8 @@ func _dump_state(label: String) -> void:
 			print("  player_hp: ", player.get_health())
 		if "current_ammo" in player:
 			print("  player_ammo: ", player.current_ammo, " / ", player.magazine_size)
+		if "current_weapon_index" in player:
+			print("  player_weapon: ", player.weapons[player.current_weapon_index].name)
 	else:
 		print("  player: (нет)")
 	print("  enemies: ", get_tree().get_nodes_in_group("enemy").size())

@@ -8,20 +8,29 @@ extends CharacterBody3D
 ##   ЛКМ   — выстрел (если курсор захвачен) / захватить курсор
 ##   R     — перезарядка оружия
 ##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
+##   1/2   — переключить оружие (пистолет / дробовик)
 ##   Esc   — отпустить курсор
 
 signal ammo_changed(current: int, magazine: int)
+signal weapon_changed(weapon_name: String)
 
 # Параметры можно менять прямо в редакторе (значок справа от ноды).
 @export var speed: float = 5.0            # скорость бега, м/с
 @export var jump_velocity: float = 4.5    # сила прыжка
 @export var mouse_sensitivity: float = 0.003
 
-# Стрельба
-@export var damage: float = 10.0          # урон за выстрел
-@export var shoot_range: float = 100.0    # дальность выстрела, м
+# Виды оружия (Этап 4.6.2): пистолет — сбалансирован, дробовик — несколько
+# пуль с разбросом, больше урона вблизи, но короче дальность и меньше обойма.
+var weapons: Array[Dictionary] = [
+	{"name": "Пистолет", "damage": 10.0, "magazine_size": 8, "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0},
+	{"name": "Дробовик", "damage": 6.0, "magazine_size": 4, "reload_time": 2.2, "range": 20.0, "pellets": 5, "spread": 0.05},
+]
+var current_weapon_index: int = 0
+var _ammo_in_weapon: Array[int] = []
 
-# Патроны и перезарядка (Этап 4.6.1)
+# Текущее оружие (заполняется из weapons при инициализации/переключении)
+@export var damage: float = 10.0          # урон за выстрел (за пулю)
+@export var shoot_range: float = 100.0    # дальность выстрела, м
 @export var magazine_size: int = 8        # патронов в обойме
 @export var reload_time: float = 1.5      # время перезарядки, с
 var current_ammo: int = magazine_size
@@ -53,6 +62,12 @@ func _ready() -> void:
 	# Записываемся в группу "player" — так враги нас находят.
 	add_to_group("player")
 	health.died.connect(_on_died)
+
+	# Инициализация оружия (Этап 4.6.2): у каждого оружия своя обойма.
+	for weapon in weapons:
+		_ammo_in_weapon.append(int(weapon.magazine_size))
+	_apply_weapon(current_weapon_index)
+
 	ammo_changed.emit(current_ammo, magazine_size)
 
 
@@ -92,6 +107,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	# R — перезарядить оружие.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		reload()
+
+	# 1/2 — переключить оружие (Этап 4.6.2).
+	if event is InputEventKey and event.pressed and event.keycode == KEY_1:
+		switch_weapon(0)
+	if event is InputEventKey and event.pressed and event.keycode == KEY_2:
+		switch_weapon(1)
 
 	# F — отремонтировать постройку, на которую смотрим.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
@@ -150,20 +171,35 @@ func shoot() -> void:
 	current_ammo -= 1
 	ammo_changed.emit(current_ammo, magazine_size)
 
-	# Пускаем луч из камеры вперёд — туда, где прицел в центре экрана.
+	var weapon: Dictionary = weapons[current_weapon_index]
+	var pellets: int = weapon.get("pellets", 1)
+	var spread: float = weapon.get("spread", 0.0)
 	var space_state := get_world_3d().direct_space_state
-	var from := camera.global_position
-	var to := from + (-camera.global_transform.basis.z) * shoot_range
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.exclude = [get_rid()]   # не попадаем лучом в самого себя
-	var result := space_state.intersect_ray(query)
+	var hits := 0
 
-	if result:
-		var collider = result.collider
-		# Если у объекта есть метод take_damage — наносим урон.
-		if collider.has_method("take_damage"):
-			collider.take_damage(damage)
-		print("Попадание: ", collider.name)
+	for i in pellets:
+		# Пускаем луч из камеры вперёд — туда, где прицел в центре экрана,
+		# с небольшим случайным разбросом для оружий типа дробовика.
+		var direction := -camera.global_transform.basis.z
+		if spread > 0.0:
+			direction = direction.rotated(camera.global_transform.basis.x, randf_range(-spread, spread))
+			direction = direction.rotated(camera.global_transform.basis.y, randf_range(-spread, spread))
+
+		var from := camera.global_position
+		var to := from + direction * shoot_range
+		var query := PhysicsRayQueryParameters3D.create(from, to)
+		query.exclude = [get_rid()]   # не попадаем лучом в самого себя
+		var result := space_state.intersect_ray(query)
+
+		if result:
+			var collider = result.collider
+			# Если у объекта есть метод take_damage — наносим урон.
+			if collider.has_method("take_damage"):
+				collider.take_damage(damage)
+			hits += 1
+
+	if hits > 0:
+		print("Попадание: ", hits, " / ", pellets)
 	else:
 		print("Мимо")
 
@@ -176,9 +212,38 @@ func reload() -> void:
 	print("CLAUDE: перезарядка...")
 	await get_tree().create_timer(reload_time).timeout
 	current_ammo = magazine_size
+	_ammo_in_weapon[current_weapon_index] = current_ammo
 	_reloading = false
 	ammo_changed.emit(current_ammo, magazine_size)
 	print("CLAUDE: перезарядка завершена")
+
+
+## Переключение оружия (Этап 4.6.2): сохраняет патроны текущего оружия
+## и подгружает параметры/патроны нового. Во время перезарядки не даём
+## переключиться, чтобы не было путаницы со временем перезарядки.
+func switch_weapon(index: int) -> void:
+	if index == current_weapon_index or index < 0 or index >= weapons.size():
+		return
+	if _reloading:
+		print("CLAUDE: нельзя переключить оружие во время перезарядки")
+		return
+
+	_ammo_in_weapon[current_weapon_index] = current_ammo
+	_apply_weapon(index)
+	ammo_changed.emit(current_ammo, magazine_size)
+	weapon_changed.emit(weapons[current_weapon_index].name)
+	print("CLAUDE: оружие переключено на ", weapons[current_weapon_index].name)
+
+
+## Применяет параметры оружия с индексом index как текущие.
+func _apply_weapon(index: int) -> void:
+	current_weapon_index = index
+	var weapon: Dictionary = weapons[index]
+	damage = weapon.damage
+	shoot_range = weapon.range
+	magazine_size = weapon.magazine_size
+	reload_time = weapon.reload_time
+	current_ammo = _ammo_in_weapon[index]
 
 
 ## Ремонт ближайшей постройки (стены) рядом с игроком (Этап 4.3).
