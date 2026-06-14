@@ -6,8 +6,11 @@ extends CharacterBody3D
 ##   Мышь  — обзор
 ##   Space — прыжок
 ##   ЛКМ   — выстрел (если курсор захвачен) / захватить курсор
-##   R     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
+##   R     — перезарядка оружия
+##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
 ##   Esc   — отпустить курсор
+
+signal ammo_changed(current: int, magazine: int)
 
 # Параметры можно менять прямо в редакторе (значок справа от ноды).
 @export var speed: float = 5.0            # скорость бега, м/с
@@ -17,6 +20,12 @@ extends CharacterBody3D
 # Стрельба
 @export var damage: float = 10.0          # урон за выстрел
 @export var shoot_range: float = 100.0    # дальность выстрела, м
+
+# Патроны и перезарядка (Этап 4.6.1)
+@export var magazine_size: int = 8        # патронов в обойме
+@export var reload_time: float = 1.5      # время перезарядки, с
+var current_ammo: int = magazine_size
+var _reloading: bool = false
 
 # Ремонт построек
 @export var repair_range: float = 4.0     # дистанция ремонта, м (с запасом на привязку к сетке)
@@ -44,6 +53,7 @@ func _ready() -> void:
 	# Записываемся в группу "player" — так враги нас находят.
 	add_to_group("player")
 	health.died.connect(_on_died)
+	ammo_changed.emit(current_ammo, magazine_size)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -79,8 +89,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			print("Не хватает ресурсов для крафта стены")
 
-	# R — отремонтировать постройку, на которую смотрим.
+	# R — перезарядить оружие.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
+		reload()
+
+	# F — отремонтировать постройку, на которую смотрим.
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
 		repair_target()
 
 	# Esc — отпустить курсор.
@@ -126,6 +140,16 @@ func _physics_process(delta: float) -> void:
 
 
 func shoot() -> void:
+	if _reloading:
+		print("CLAUDE: идёт перезарядка")
+		return
+	if current_ammo <= 0:
+		print("CLAUDE: патроны закончились — нажмите R для перезарядки")
+		return
+
+	current_ammo -= 1
+	ammo_changed.emit(current_ammo, magazine_size)
+
 	# Пускаем луч из камеры вперёд — туда, где прицел в центре экрана.
 	var space_state := get_world_3d().direct_space_state
 	var from := camera.global_position
@@ -142,6 +166,19 @@ func shoot() -> void:
 		print("Попадание: ", collider.name)
 	else:
 		print("Мимо")
+
+
+## Перезарядка оружия (Этап 4.6.1): занимает reload_time секунд.
+func reload() -> void:
+	if _reloading or current_ammo == magazine_size:
+		return
+	_reloading = true
+	print("CLAUDE: перезарядка...")
+	await get_tree().create_timer(reload_time).timeout
+	current_ammo = magazine_size
+	_reloading = false
+	ammo_changed.emit(current_ammo, magazine_size)
+	print("CLAUDE: перезарядка завершена")
 
 
 ## Ремонт ближайшей постройки (стены) рядом с игроком (Этап 4.3).

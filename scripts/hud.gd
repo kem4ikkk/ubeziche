@@ -4,6 +4,7 @@ extends CanvasLayer
 
 @onready var inventory_label: Label = $InventoryLabel
 @onready var health_label: Label = $HealthLabel
+@onready var ammo_label: Label = $AmmoLabel
 @onready var phase_label: Label = $PhaseLabel
 @onready var result_screen: ColorRect = $ResultScreen
 @onready var result_label: Label = $ResultScreen/ResultLabel
@@ -22,6 +23,9 @@ func _ready() -> void:
 		var health: HealthComponent = player.get_node("HealthComponent")
 		health.health_changed.connect(_on_health_changed)
 		_on_health_changed(health.current_health, health.max_health)
+	if is_instance_valid(player) and player.has_signal("ammo_changed"):
+		player.ammo_changed.connect(_on_ammo_changed)
+		_on_ammo_changed(player.current_ammo, player.magazine_size)
 
 
 func _process(_delta: float) -> void:
@@ -55,3 +59,7 @@ func _on_inventory_changed(inventory: Dictionary) -> void:
 
 func _on_health_changed(current: float, maximum: float) -> void:
 	health_label.text = "HP: %d / %d" % [current, maximum]
+
+
+func _on_ammo_changed(current: int, magazine: int) -> void:
+	ammo_label.text = "Патроны: %d / %d" % [current, magazine]

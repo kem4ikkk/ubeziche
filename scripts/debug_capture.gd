@@ -59,6 +59,20 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(0.5).timeout
 		_dump_state("ПОСЛЕ телепорта (собираю ресурсы)")
 
+	# 4.5) Патроны и перезарядка (Этап 4.6.1): расстреливаем обойму и
+	# проверяем перезарядку — делаем это здесь, в стороне от зомби.
+	if is_instance_valid(player) and player.has_method("reload"):
+		print("CLAUDE: расстреливаю обойму до конца")
+		while player.current_ammo > 0:
+			player.shoot()
+			await get_tree().create_timer(0.1).timeout
+		print("CLAUDE: выстрел при пустой обойме")
+		player.shoot()
+		print("CLAUDE: перезаряжаюсь")
+		player.reload()
+		await get_tree().create_timer(player.reload_time + 0.2).timeout
+		print("  player_ammo после перезарядки: ", player.current_ammo, " / ", player.magazine_size)
+
 	# 5) Попробуем скрафтить если достаточно ресурсов.
 	if InventorySystem.get_resource("wood") >= 2:
 		print("CLAUDE: крафтим стену (2 дерева → 1 стена)")
@@ -128,6 +142,8 @@ func _dump_state(label: String) -> void:
 			print("  player_pos: ", (player as Node3D).global_position)
 		if player.has_method("get_health"):
 			print("  player_hp: ", player.get_health())
+		if "current_ammo" in player:
+			print("  player_ammo: ", player.current_ammo, " / ", player.magazine_size)
 	else:
 		print("  player: (нет)")
 	print("  enemies: ", get_tree().get_nodes_in_group("enemy").size())

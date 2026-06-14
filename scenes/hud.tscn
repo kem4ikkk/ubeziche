@@ -35,9 +35,20 @@ anchor_top = 1.0
 anchor_right = 0.2
 anchor_bottom = 1.0
 offset_left = 10.0
+offset_top = -70.0
+offset_bottom = -40.0
+text = "HP: 100 / 100"
+theme_override_font_sizes/font_size = 20
+
+[node name="AmmoLabel" type="Label" parent="."]
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.2
+anchor_bottom = 1.0
+offset_left = 10.0
 offset_top = -40.0
 offset_bottom = -10.0
-text = "HP: 100 / 100"
+text = "Патроны: 8 / 8"
 theme_override_font_sizes/font_size = 20
 
 [node name="PhaseLabel" type="Label" parent="."]
