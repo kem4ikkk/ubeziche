@@ -3,6 +3,7 @@
 extends CanvasLayer
 
 @onready var inventory_label: Label = $InventoryLabel
+@onready var money_label: Label = $MoneyLabel
 @onready var health_label: Label = $HealthLabel
 @onready var ammo_label: Label = $AmmoLabel
 @onready var phase_label: Label = $PhaseLabel
@@ -18,6 +19,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
 	_on_inventory_changed(InventorySystem.inventory)
+	InventorySystem.money_changed.connect(_on_money_changed)
+	_on_money_changed(InventorySystem.money)
 
 	var player := get_tree().get_first_node_in_group("player")
 	if is_instance_valid(player) and player.has_node("HealthComponent"):
@@ -59,6 +62,10 @@ func _on_inventory_changed(inventory: Dictionary) -> void:
 	for resource_type in inventory:
 		text += "%s: %d\n" % [resource_type.capitalize(), inventory[resource_type]]
 	inventory_label.text = text.strip_edges()
+
+
+func _on_money_changed(amount: int) -> void:
+	money_label.text = "Деньги: %d$" % amount
 
 
 func _on_health_changed(current: float, maximum: float) -> void:

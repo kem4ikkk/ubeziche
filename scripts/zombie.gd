@@ -23,6 +23,10 @@ extends CharacterBody3D
 @export var drop_amount_max: int = 2
 @export var drop_scene: PackedScene = preload("res://scenes/resource_pickup.tscn")
 
+# Деньги за убийство (Этап 4.7.2): вторая валюта, идёт на покупки в мастерской.
+# Танк даёт больше (задаётся в его сцене).
+@export var money_reward: int = 10
+
 @onready var health: HealthComponent = $HealthComponent
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -131,6 +135,7 @@ func get_health() -> float:
 func _on_died() -> void:
 	_dead = true
 	print("Зомби уничтожен")
+	InventorySystem.add_money(money_reward)   # деньги за убийство (Этап 4.7.2)
 	_drop_resource()
 	queue_free()
 
