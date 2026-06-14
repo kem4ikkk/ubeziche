@@ -73,14 +73,26 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(player.reload_time + 0.2).timeout
 		print("  player_ammo после перезарядки: ", player.current_ammo, " / ", player.magazine_size)
 
-	# 4.6) Виды оружия (Этап 4.6.2): переключаемся на дробовик и проверяем
-	# его параметры/обойму, затем возвращаемся на пистолет.
+	# 4.6) Виды оружия + покупка (Этап 4.6.2 / 4.7.2): в начале только пистолет.
+	# Сначала пробуем переключиться на дробовик БЕЗ покупки (должно отказать),
+	# затем покупаем его за деньги в мастерской и проверяем стрельбу.
 	if is_instance_valid(player) and player.has_method("switch_weapon"):
-		print("CLAUDE: переключаюсь на дробовик")
+		print("CLAUDE: пробую переключиться на дробовик ДО покупки")
 		player.switch_weapon(1)
-		print("  оружие: ", player.weapons[player.current_weapon_index].name,
-				", урон: ", player.damage, ", обойма: ", player.current_ammo, " / ", player.magazine_size,
-				", дальность: ", player.shoot_range)
+		print("  текущее оружие (ожидается Пистолет): ", player.weapons[player.current_weapon_index].name)
+		print("CLAUDE: покупаю дробовик в мастерской")
+		InventorySystem.add_money(60)  # в тесте денег к этому моменту мало — добавим
+		var workshop_w := get_tree().get_first_node_in_group("workshop")
+		var money_before_w := InventorySystem.get_money()
+		var bought_weapon := false
+		if workshop_w != null:
+			bought_weapon = workshop_w.buy_weapon()
+		else:
+			bought_weapon = player.buy_weapon(1)
+		print("  покупка дробовика: ", bought_weapon, " | деньги ", money_before_w, " → ",
+				InventorySystem.get_money(), "$ | оружие сейчас: ", player.weapons[player.current_weapon_index].name)
+		print("  параметры: урон ", player.damage, ", обойма ", player.current_ammo, " / ", player.magazine_size,
+				", дальность ", player.shoot_range)
 		print("CLAUDE: выстрел из дробовика")
 		player.shoot()
 		await get_tree().create_timer(0.1).timeout
@@ -120,7 +132,7 @@ func _run_capture(args: PackedStringArray) -> void:
 	# за убийство зомби, в мастерской их тратим. Методы дёргаем напрямую
 	# (в прогоне реальный ввод и зоны не работают).
 	print("CLAUDE: проверяю двойную экономику и мастерскую (4.7.2 / 4.7.3)")
-	print("  деньги после убийств зомби: ", InventorySystem.get_money(), "$")
+	print("  текущий баланс денег: ", InventorySystem.get_money(), "$")
 	var workshop := get_tree().get_first_node_in_group("workshop")
 	if workshop != null:
 		# Крафт стены из ресурсов (даём дерево, чтобы точно хватило).

@@ -8,10 +8,10 @@ extends CharacterBody3D
 ##   ЛКМ   — выстрел (если курсор захвачен) / захватить курсор
 ##   R     — перезарядка оружия
 ##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
-##   1/2   — переключить оружие (пистолет / дробовик)
+##   1/2   — переключить оружие (только купленное; в начале есть лишь пистолет)
 ##   Esc   — отпустить курсор
-## Крафт и магазин (клавиши C / G / H) теперь работают только рядом с
-## мастерской — см. scripts/workshop.gd (Этап 4.7.3).
+## Крафт и магазин (клавиши C / G / H / J) теперь работают только рядом с
+## мастерской — см. scripts/workshop.gd (Этап 4.7.3). Оружие покупается там же.
 
 signal ammo_changed(current: int, magazine: int)
 signal weapon_changed(weapon_name: String)
@@ -24,11 +24,14 @@ signal weapon_changed(weapon_name: String)
 # Виды оружия (Этап 4.6.2): пистолет — сбалансирован, дробовик — несколько
 # пуль с разбросом, больше урона вблизи, но короче дальность и меньше обойма.
 var weapons: Array[Dictionary] = [
-	{"name": "Пистолет", "damage": 10.0, "magazine_size": 8, "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0},
-	{"name": "Дробовик", "damage": 6.0, "magazine_size": 4, "reload_time": 2.2, "range": 20.0, "pellets": 5, "spread": 0.05},
+	{"name": "Пистолет", "damage": 10.0, "magazine_size": 8, "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0, "price": 0},
+	{"name": "Дробовик", "damage": 6.0, "magazine_size": 4, "reload_time": 2.2, "range": 20.0, "pellets": 5, "spread": 0.05, "price": 50},
 ]
 var current_weapon_index: int = 0
 var _ammo_in_weapon: Array[int] = []
+# Какое оружие уже куплено (Этап 4.7.2: деньги тратятся на оружие).
+# В начале игры у игрока только пистолет (индекс 0), остальное — за деньги.
+var _owned: Array[bool] = []
 
 # Текущее оружие (заполняется из weapons при инициализации/переключении)
 @export var damage: float = 10.0          # урон за выстрел (за пулю)
@@ -66,8 +69,10 @@ func _ready() -> void:
 	health.died.connect(_on_died)
 
 	# Инициализация оружия (Этап 4.6.2): у каждого оружия своя обойма.
-	for weapon in weapons:
-		_ammo_in_weapon.append(int(weapon.magazine_size))
+	# Стартует только пистолет (индекс 0), остальное покупается за деньги.
+	for i in weapons.size():
+		_ammo_in_weapon.append(int(weapons[i].magazine_size))
+		_owned.append(i == 0)
 	_apply_weapon(current_weapon_index)
 
 	ammo_changed.emit(current_ammo, magazine_size)
@@ -222,12 +227,38 @@ func switch_weapon(index: int) -> void:
 	if _reloading:
 		print("CLAUDE: нельзя переключить оружие во время перезарядки")
 		return
+	if not _owned[index]:
+		print("CLAUDE: оружие ", weapons[index].name, " ещё не куплено")
+		return
 
 	_ammo_in_weapon[current_weapon_index] = current_ammo
 	_apply_weapon(index)
 	ammo_changed.emit(current_ammo, magazine_size)
 	weapon_changed.emit(weapons[current_weapon_index].name)
 	print("CLAUDE: оружие переключено на ", weapons[current_weapon_index].name)
+
+
+## Куплено ли оружие с индексом index (Этап 4.7.2).
+func owns_weapon(index: int) -> bool:
+	return index >= 0 and index < _owned.size() and _owned[index]
+
+
+## Покупка оружия за деньги (Этап 4.7.2): доступно в мастерской.
+## Возвращает true при успешной покупке; купленное сразу делаем активным.
+func buy_weapon(index: int) -> bool:
+	if index < 0 or index >= weapons.size():
+		return false
+	if _owned[index]:
+		print("CLAUDE: оружие ", weapons[index].name, " уже куплено")
+		return false
+	var price: int = int(weapons[index].get("price", 0))
+	if not InventorySystem.spend_money(price):
+		print("CLAUDE: не хватает денег на ", weapons[index].name, " (нужно ", price, "$)")
+		return false
+	_owned[index] = true
+	print("Куплено оружие: ", weapons[index].name, " за ", price, "$")
+	switch_weapon(index)
+	return true
 
 
 ## Применяет параметры оружия с индексом index как текущие.

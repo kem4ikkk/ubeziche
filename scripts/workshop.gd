@@ -5,6 +5,7 @@ extends Area3D
 ##   C — скрафтить стену из ресурсов (2 дерева → 1 стена)   [ресурсная экономика]
 ##   G — купить стену за деньги                              [денежная экономика]
 ##   H — купить лечение за деньги (+HP)                      [денежная экономика]
+##   J — купить оружие за деньги (дробовик)                  [денежная экономика]
 ##
 ## Так замыкаются обе ветки экономики (Этап 4.7.2): дерево/камень тратятся
 ## на крафт, а деньги (капают за убийство зомби) — на покупки в мастерской.
@@ -12,6 +13,7 @@ extends Area3D
 @export var buy_wall_cost: int = 25     # цена стены за деньги
 @export var heal_cost: int = 30         # цена одной покупки лечения
 @export var heal_amount: float = 25.0   # сколько HP даёт покупка лечения
+@export var weapon_for_sale_index: int = 1  # какое оружие продаёт верстак (1 — дробовик)
 
 var _player_inside: bool = false
 var _capture_mode: bool = false
@@ -52,6 +54,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_wall()
 			KEY_H:
 				buy_heal()
+			KEY_J:
+				buy_weapon()
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.
@@ -91,13 +95,33 @@ func buy_heal() -> bool:
 	return false
 
 
+## Покупка оружия за деньги — цену и владение считает сам игрок.
+func buy_weapon() -> bool:
+	var player := get_tree().get_first_node_in_group("player")
+	if not is_instance_valid(player) or not player.has_method("buy_weapon"):
+		return false
+	return player.buy_weapon(weapon_for_sale_index)
+
+
 ## Подсказка над верстаком: ярче, когда игрок рядом.
 func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)" % [buy_wall_cost, heal_cost]
+		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s" % [
+				buy_wall_cost, heal_cost, _weapon_offer_text()]
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"
 		prompt.modulate = Color(0.7, 0.7, 0.7)
+
+
+## Текст предложения оружия для подсказки: название + цена (или «куплено»).
+func _weapon_offer_text() -> String:
+	var player := get_tree().get_first_node_in_group("player")
+	if is_instance_valid(player) and "weapons" in player and weapon_for_sale_index < player.weapons.size():
+		var w: Dictionary = player.weapons[weapon_for_sale_index]
+		if player.has_method("owns_weapon") and player.owns_weapon(weapon_for_sale_index):
+			return "%s (куплено)" % w.name
+		return "%s (%d$)" % [w.name, int(w.get("price", 0))]
+	return "оружие"
