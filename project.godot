@@ -23,6 +23,7 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 DebugCapture="*res://scripts/debug_capture.gd"
 InventorySystem="*res://scripts/inventory_system.gd"
 CraftSystem="*res://scripts/craft_system.gd"
+EventBus="*res://scripts/event_bus.gd"
 
 [rendering]
 

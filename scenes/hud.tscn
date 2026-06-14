@@ -73,6 +73,20 @@ horizontal_alignment = 2
 text = "День: 20"
 theme_override_font_sizes/font_size = 20
 
+[node name="AlertLabel" type="Label" parent="."]
+visible = false
+anchor_left = 0.5
+anchor_top = 0.0
+anchor_right = 0.5
+anchor_bottom = 0.0
+offset_left = -300.0
+offset_top = 10.0
+offset_right = 300.0
+offset_bottom = 50.0
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+text = ""
+
 [node name="ResultScreen" type="ColorRect" parent="."]
 visible = false
 anchor_right = 1.0

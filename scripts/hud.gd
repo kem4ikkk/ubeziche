@@ -9,10 +9,15 @@ extends CanvasLayer
 @onready var phase_label: Label = $PhaseLabel
 @onready var result_screen: ColorRect = $ResultScreen
 @onready var result_label: Label = $ResultScreen/ResultLabel
+@onready var alert_label: Label = $AlertLabel
+
+const ALERT_DURATION := 2.5  ## сколько секунд держим тревожное сообщение (Этап 4.9)
 
 var _day_night_cycle: Node
 var _game_state_manager: Node
+var _wave_manager: Node
 var _weapon_name: String = "Пистолет"
+var _alert_timer: float = 0.0
 
 # Понятные русские названия ресурсов для HUD.
 const RESOURCE_NAMES := {
@@ -24,6 +29,7 @@ const RESOURCE_NAMES := {
 
 
 func _ready() -> void:
+	add_to_group("hud")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
 	_on_inventory_changed(InventorySystem.inventory)
@@ -42,8 +48,10 @@ func _ready() -> void:
 		player.weapon_changed.connect(_on_weapon_changed)
 		_on_weapon_changed(player.weapons[player.current_weapon_index].name)
 
+	EventBus.building_damaged.connect(_on_building_damaged)
 
-func _process(_delta: float) -> void:
+
+func _process(delta: float) -> void:
 	# DayNightCycle может ещё не быть готов в момент _ready() HUD-а — ищем лениво.
 	if not is_instance_valid(_day_night_cycle):
 		_day_night_cycle = get_tree().get_first_node_in_group("day_night_cycle")
@@ -58,6 +66,19 @@ func _process(_delta: float) -> void:
 		_game_state_manager = get_tree().get_first_node_in_group("game_state_manager")
 		if is_instance_valid(_game_state_manager):
 			_game_state_manager.game_over.connect(_on_game_over)
+
+	# WaveManager тоже может появиться позже HUD-а — ищем лениво (Этап 4.9).
+	if not is_instance_valid(_wave_manager):
+		_wave_manager = get_tree().get_first_node_in_group("wave_manager")
+		if is_instance_valid(_wave_manager):
+			_wave_manager.wave_started.connect(_on_wave_started)
+			_wave_manager.wave_cleared.connect(_on_wave_cleared)
+
+	# Тревожное сообщение гаснет само через ALERT_DURATION секунд (Этап 4.9).
+	if _alert_timer > 0.0:
+		_alert_timer -= delta
+		if _alert_timer <= 0.0:
+			alert_label.visible = false
 
 
 func _on_game_over(victory: bool) -> void:
@@ -90,3 +111,23 @@ func _on_weapon_changed(weapon_name: String) -> void:
 	var player := get_tree().get_first_node_in_group("player")
 	if is_instance_valid(player):
 		_on_ammo_changed(player.current_ammo, player.magazine_size)
+
+
+## Индикаторы угроз (Этап 4.9).
+func _on_building_damaged(building_name: String) -> void:
+	_show_alert("⚠ Атакована постройка: %s!" % building_name, Color(1.0, 0.3, 0.3))
+
+
+func _on_wave_started(wave_number: int) -> void:
+	_show_alert("⚠ Волна %d: зомби приближаются!" % wave_number, Color(1.0, 0.85, 0.2))
+
+
+func _on_wave_cleared(wave_number: int) -> void:
+	_show_alert("Волна %d зачищена!" % wave_number, Color(0.4, 1.0, 0.4))
+
+
+func _show_alert(text: String, color: Color) -> void:
+	alert_label.text = text
+	alert_label.modulate = color
+	alert_label.visible = true
+	_alert_timer = ALERT_DURATION

@@ -193,6 +193,24 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	_dump_state("ПОСЛЕ ремонта стены")
 
+	# 6.55) Индикаторы угроз в HUD (Этап 4.9): повреждение постройки должно
+	# показать тревожное сообщение, а волна — оповещения о начале/зачистке.
+	var hud := get_tree().get_first_node_in_group("hud")
+	if is_instance_valid(wall) and wall.has_method("take_damage") and is_instance_valid(hud):
+		print("CLAUDE: проверяю индикатор «постройка под атакой» (4.9)")
+		wall.take_damage(5.0)
+		await get_tree().create_timer(0.1).timeout
+		print("  alert_label.visible: ", hud.alert_label.visible, ", text: '", hud.alert_label.text, "'")
+	if wave_manager != null and is_instance_valid(hud):
+		print("CLAUDE: проверяю оповещения о волнах (4.9)")
+		wave_manager.start_wave()
+		await get_tree().create_timer(0.1).timeout
+		print("  wave_started alert: '", hud.alert_label.text, "'")
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		await get_tree().create_timer(0.5).timeout
+		print("  wave_cleared alert: '", hud.alert_label.text, "'")
+
 	# 6.6) Спавним зомби-танка вручную для проверки (Этап 4.4) — обычно
 	# танки появляются с волны 2, но в коротком прогоне до неё не доходит.
 	if wave_manager != null and wave_manager.tank_zombie_scene != null:

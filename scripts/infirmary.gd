@@ -38,6 +38,7 @@ func _physics_process(delta: float) -> void:
 
 func take_damage(amount: float) -> void:
 	health.take_damage(amount)
+	EventBus.building_damaged.emit("Лазарет")
 
 
 func repair(amount: float) -> void:

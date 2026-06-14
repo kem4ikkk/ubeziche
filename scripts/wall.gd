@@ -16,6 +16,7 @@ func _ready() -> void:
 
 func take_damage(amount: float) -> void:
 	health.take_damage(amount)
+	EventBus.building_damaged.emit("Стена")
 
 
 ## Восстановить HP (например, при ремонте игроком).

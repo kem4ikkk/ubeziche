@@ -5,6 +5,7 @@ extends Node3D
 ##
 ## Точки спавна — дочерние узлы Marker3D под узлом "SpawnPoints".
 
+signal wave_started(wave_number: int)
 signal wave_cleared(wave_number: int)
 
 @export var zombie_scene: PackedScene
@@ -29,12 +30,17 @@ var _spawning: bool = false
 @onready var _spawn_points: Array[Node] = $SpawnPoints.get_children()
 
 
+func _ready() -> void:
+	add_to_group("wave_manager")
+
+
 ## Запустить следующую волну. Если предыдущая ещё не зачищена — ничего не делает.
 func start_wave() -> void:
 	if _spawning or _zombies_alive > 0:
 		print("Волна уже идёт — пропускаем запуск новой")
 		return
 	current_wave += 1
+	wave_started.emit(current_wave)
 	var count := first_wave_count + (current_wave - 1) * count_increment
 	var tank_count := 0
 	if tank_zombie_scene != null and current_wave >= tank_starting_wave:
