@@ -581,6 +581,52 @@ func _run_capture(args: PackedStringArray) -> void:
 			print("  HUD alert при восстановлении питания: '", hud.alert_label.text, "'")
 		_dump_state("ПОСЛЕ системы питания")
 
+	# 6.98) Молот (Этап 4.17): крафтится один раз в мастерской и удваивает
+	# восстановление HP за ремонт (F). Проверяем крафт и эффект на стене.
+	var workshop_h := get_tree().get_first_node_in_group("workshop")
+	if is_instance_valid(player) and player is Node3D and is_instance_valid(workshop_h):
+		print("CLAUDE: проверяю молот (4.17)")
+		# Игрок мог погибнуть в предыдущих тестах — лечим и снимаем паузу,
+		# иначе ремонт/постройка не сработают.
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
+		InventorySystem.has_hammer = false
+		InventorySystem.add_resource("wood", 20)
+		InventorySystem.add_resource("steel", 20)
+		InventorySystem.add_money(100)
+		(player as Node3D).global_position = Vector3(-3, 1, 3)
+		await get_tree().create_timer(0.2).timeout
+		var crafted_hammer: bool = workshop_h.craft_hammer()
+		print("  молот скрафчен: ", crafted_hammer, ", has_hammer: ", InventorySystem.has_hammer)
+
+		# Строим стену рядом, ломаем её и проверяем ремонт x2.
+		if player.has_node("BuildSystem"):
+			var bs_h := player.get_node("BuildSystem")
+			for b in get_tree().get_nodes_in_group("building"):
+				b.queue_free()
+			InventorySystem.add_resource("wall", 1)
+			(player as Node3D).global_position = Vector3(0, 1, 5)
+			if not bs_h.build_mode:
+				bs_h.toggle()
+			bs_h.select_buildable("Стена")
+			await get_tree().create_timer(0.3).timeout
+			bs_h.try_place()
+			if bs_h.build_mode:
+				bs_h.toggle()
+			var wall_h := get_tree().get_first_node_in_group("building")
+			if is_instance_valid(wall_h) and wall_h.has_method("take_damage"):
+				wall_h.take_damage(40.0)
+				await get_tree().create_timer(0.2).timeout
+				var hp_before_h: float = wall_h.health.current_health
+				InventorySystem.add_resource("wood", 1)
+				player.repair_target()
+				await get_tree().create_timer(0.1).timeout
+				var hp_after_h: float = wall_h.health.current_health
+				print("  ремонт с молотом: HP ", hp_before_h, " → ", hp_after_h,
+						" (ожидается +", player.repair_amount * 2.0, ")")
+		_dump_state("ПОСЛЕ молота")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")

@@ -31,6 +31,11 @@ var money: int = 0
 const MAX_TIER := 4
 var shelter_tier: int = 1
 
+# Молот (Этап 4.17): постоянный инструмент, крафтится один раз в мастерской.
+# Пока есть — ремонт построек (player.gd: repair_target) восстанавливает
+# вдвое больше HP за один удар, как в оригинале ("чинит конструкции быстрее").
+var has_hammer: bool = false
+
 
 func _ready() -> void:
 	pass

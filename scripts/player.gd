@@ -318,8 +318,10 @@ func repair_target() -> void:
 	for resource_type in REPAIR_COST:
 		InventorySystem.use_resource(resource_type, REPAIR_COST[resource_type])
 
-	nearest.repair(repair_amount)
-	print("Постройка отремонтирована (+", repair_amount, " HP)")
+	# С молотом (Этап 4.17) ремонт восстанавливает вдвое больше HP за удар.
+	var amount := repair_amount * 2.0 if InventorySystem.has_hammer else repair_amount
+	nearest.repair(amount)
+	print("Постройка отремонтирована (+", amount, " HP)")
 
 
 ## Урон по игроку (например, от зомби).

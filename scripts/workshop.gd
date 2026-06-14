@@ -28,6 +28,9 @@ const TIER_UPGRADE_COST := {
 	4: {"wood": 80, "steel": 60, "money": 250},
 }
 
+## Стоимость крафта Молота (Этап 4.17, инструмент крафтится один раз).
+const HAMMER_COST := {"wood": 15, "steel": 10, "money": 50}
+
 var _player_inside: bool = false
 var _capture_mode: bool = false
 
@@ -73,6 +76,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_turret_ammo()
 			KEY_T:
 				upgrade_shelter_tier()
+			KEY_M:
+				craft_hammer()
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.
@@ -145,6 +150,27 @@ func upgrade_shelter_tier() -> bool:
 	return true
 
 
+## Крафт Молота (Этап 4.17): постоянный инструмент, делается один раз.
+## Пока есть — ремонт построек (F) восстанавливает вдвое больше HP за удар.
+func craft_hammer() -> bool:
+	if InventorySystem.has_hammer:
+		print("Мастерская: молот уже скрафчен")
+		return false
+	if InventorySystem.get_resource("wood") < HAMMER_COST.wood \
+			or InventorySystem.get_resource("steel") < HAMMER_COST.steel \
+			or InventorySystem.get_money() < HAMMER_COST.money:
+		print("Мастерская: не хватает ресурсов для молота (нужно ",
+				HAMMER_COST.wood, " дерева, ", HAMMER_COST.steel, " стали, ", HAMMER_COST.money, "$)")
+		return false
+	InventorySystem.use_resource("wood", HAMMER_COST.wood)
+	InventorySystem.use_resource("steel", HAMMER_COST.steel)
+	InventorySystem.spend_money(HAMMER_COST.money)
+	InventorySystem.has_hammer = true
+	_update_prompt()
+	print("Мастерская: скрафтили молот — ремонт теперь восстанавливает вдвое больше HP")
+	return true
+
+
 ## Покупка следующего оружия из арсенала — цену и владение считает игрок.
 func buy_weapon() -> bool:
 	var player := get_tree().get_first_node_in_group("player")
@@ -162,8 +188,8 @@ func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)\n[T] %s" % [
-				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost, _tier_offer_text()]
+		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)\n[T] %s\n[M] %s" % [
+				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost, _tier_offer_text(), _hammer_offer_text()]
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"
@@ -178,6 +204,13 @@ func _tier_offer_text() -> String:
 	var cost: Dictionary = TIER_UPGRADE_COST[current + 1]
 	return "Тир %d → Тир %d (%d дерева, %d стали, %d$)" % [
 			current, current + 1, cost.wood, cost.steel, cost.money]
+
+
+## Текст предложения молота для подсказки (Этап 4.17).
+func _hammer_offer_text() -> String:
+	if InventorySystem.has_hammer:
+		return "молот скрафчен (ремонт x2 HP)"
+	return "молот (%d дерева, %d стали, %d$)" % [HAMMER_COST.wood, HAMMER_COST.steel, HAMMER_COST.money]
 
 
 ## Текст предложения оружия для подсказки: следующий ствол + цена.
