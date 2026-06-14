@@ -1,8 +1,9 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_zombie"]
 [ext_resource type="PackedScene" path="res://scenes/zombie_tank.tscn" id="2b_zombie_tank"]
+[ext_resource type="PackedScene" path="res://scenes/juggernaut.tscn" id="2c_juggernaut"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/wave_manager.gd" id="4_wave"]
 [ext_resource type="PackedScene" path="res://scenes/resource_pickup.tscn" id="5_pickup"]
@@ -175,6 +176,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 script = ExtResource("4_wave")
 zombie_scene = ExtResource("2_zombie")
 tank_zombie_scene = ExtResource("2b_zombie_tank")
+juggernaut_scene = ExtResource("2c_juggernaut")
 
 [node name="DayNightCycle" type="Node" parent="."]
 script = ExtResource("6_daynight")

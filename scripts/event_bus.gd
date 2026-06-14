@@ -6,3 +6,8 @@ extends Node
 ## уведомления здесь, а HUD слушает эту шину.
 
 signal building_damaged(building_name: String)
+
+## Джаггернаут — мини-босс (Этап 4.10). HUD показывает особое предупреждение
+## при его появлении и сообщение о победе при его уничтожении.
+signal juggernaut_spawned()
+signal juggernaut_defeated()

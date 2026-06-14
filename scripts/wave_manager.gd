@@ -23,6 +23,11 @@ signal wave_cleared(wave_number: int)
 @export var tanks_per_wave: int = 1          # танков в волне, когда они появляются впервые
 @export var tank_wave_step: int = 2          # каждые N ночей после старта танков +1 танк (Этап 4.5.2)
 
+# Джаггернаут (Этап 4.10): мини-босс, целящийся в постройки. Приходит по
+# одному с поздних ночей — серьёзная угроза баррикадам.
+@export var juggernaut_scene: PackedScene
+@export var juggernaut_starting_wave: int = 3  # с какой ночи приходит мини-босс
+
 var current_wave: int = 0
 var _zombies_alive: int = 0
 var _spawning: bool = false
@@ -45,15 +50,22 @@ func start_wave() -> void:
 	var tank_count := 0
 	if tank_zombie_scene != null and current_wave >= tank_starting_wave:
 		tank_count = tanks_per_wave + (current_wave - tank_starting_wave) / tank_wave_step
+	# Джаггернаут (Этап 4.10): один мини-босс за ночь, начиная с заданной волны.
+	var juggernaut_count := 0
+	if juggernaut_scene != null and current_wave >= juggernaut_starting_wave:
+		juggernaut_count = 1
 	# Этап 4.5.1: с каждой следующей ночью зомби появляются чаще.
 	var interval: float = maxf(min_spawn_interval, spawn_interval - (current_wave - 1) * spawn_interval_decrease)
-	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count, ", интервал спавна: ", interval)
+	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count, ", джаггернаутов: ", juggernaut_count, ", интервал спавна: ", interval)
 	_spawning = true
 	for i in count:
 		_spawn_zombie(zombie_scene)
 		await get_tree().create_timer(interval).timeout
 	for i in tank_count:
 		_spawn_zombie(tank_zombie_scene)
+		await get_tree().create_timer(interval).timeout
+	for i in juggernaut_count:
+		_spawn_zombie(juggernaut_scene)
 		await get_tree().create_timer(interval).timeout
 	_spawning = false
 	# Если игрок успел перебить всех ещё во время спавна.

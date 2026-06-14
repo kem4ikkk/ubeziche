@@ -306,6 +306,59 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  склад пополняет боезапас: ", ammo_before_storage, " → ", InventorySystem.get_resource("turret_ammo"))
 		_dump_state("ПОСЛЕ лазарета и склада")
 
+	# 6.9) Джаггернаут (Этап 4.10): мини-босс с большим HP, целящийся в
+	# постройки, но переключающийся на игрока в радиусе аггро (риск/выгода).
+	if wave_manager != null and wave_manager.juggernaut_scene != null and is_instance_valid(player) and player is Node3D:
+		print("CLAUDE: проверяю джаггернаута (4.10)")
+		# Чистим сцену от прочих врагов и построек, лечим игрока — нужна
+		# детерминированная проверка цели мини-босса.
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		for b in get_tree().get_nodes_in_group("building"):
+			b.queue_free()
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		await get_tree().create_timer(0.1).timeout
+		# Игрока — далеко (вне радиуса аггро), чтобы босс целился в постройку.
+		(player as Node3D).global_position = Vector3(-8, 1, 8)
+		var jugg: Node = wave_manager.juggernaut_scene.instantiate()
+		get_tree().current_scene.add_child(jugg)
+		(jugg as Node3D).global_position = Vector3(6, 1, -6)
+		await get_tree().create_timer(0.1).timeout
+		print("  juggernaut_hp: ", jugg.get_health() if jugg.has_method("get_health") else -1.0)
+		if is_instance_valid(hud):
+			print("  HUD при спавне джаггернаута: '", hud.alert_label.text, "'")
+		# Стена рядом с боссом (но далеко от игрока) — он должен её крушить.
+		var wall_scene := load("res://scenes/wall.tscn")
+		var jwall: Node = wall_scene.instantiate()
+		get_tree().current_scene.add_child(jwall)
+		(jwall as Node3D).global_position = Vector3(6, 0.5, -3)
+		var jwall_hp_before := -1.0
+		if jwall.has_node("HealthComponent"):
+			jwall_hp_before = jwall.get_node("HealthComponent").current_health
+		await get_tree().create_timer(3.0).timeout
+		var jwall_hp_after := -1.0
+		if is_instance_valid(jwall) and jwall.has_node("HealthComponent"):
+			jwall_hp_after = jwall.get_node("HealthComponent").current_health
+		print("  стена под атакой босса (игрок далеко): HP ", jwall_hp_before, " → ", jwall_hp_after)
+		# Механика аггро: ставим игрока вплотную — босс переключается на него.
+		var php_before: float = player.get_health()
+		if is_instance_valid(jugg):
+			(player as Node3D).global_position = (jugg as Node3D).global_position + Vector3(2, 0, 0)
+			await get_tree().create_timer(2.0).timeout
+		print("  игрок подошёл вплотную: HP ", php_before, " → ", player.get_health(), " (босс переключился на игрока)")
+		# Добиваем мини-босса — проверяем награду и оповещение.
+		var money_before_j := InventorySystem.get_money()
+		if is_instance_valid(jugg) and jugg.has_method("take_damage"):
+			jugg.take_damage(1000.0)
+			await get_tree().create_timer(0.2).timeout
+		print("  деньги за джаггернаута: ", money_before_j, " → ", InventorySystem.get_money(), "$")
+		if is_instance_valid(hud):
+			print("  HUD при гибели джаггернаута: '", hud.alert_label.text, "'")
+		if player.has_method("heal"):
+			player.heal(1000.0)  # лечим, чтобы игрок не погиб до снимка
+		_dump_state("ПОСЛЕ джаггернаута")
+
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()

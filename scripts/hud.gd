@@ -49,6 +49,8 @@ func _ready() -> void:
 		_on_weapon_changed(player.weapons[player.current_weapon_index].name)
 
 	EventBus.building_damaged.connect(_on_building_damaged)
+	EventBus.juggernaut_spawned.connect(_on_juggernaut_spawned)
+	EventBus.juggernaut_defeated.connect(_on_juggernaut_defeated)
 
 
 func _process(delta: float) -> void:
@@ -124,6 +126,15 @@ func _on_wave_started(wave_number: int) -> void:
 
 func _on_wave_cleared(wave_number: int) -> void:
 	_show_alert("Волна %d зачищена!" % wave_number, Color(0.4, 1.0, 0.4))
+
+
+## Мини-босс (Этап 4.10).
+func _on_juggernaut_spawned() -> void:
+	_show_alert("⚠ ДЖАГГЕРНАУТ ПРОРЫВАЕТСЯ!", Color(0.8, 0.3, 1.0))
+
+
+func _on_juggernaut_defeated() -> void:
+	_show_alert("Джаггернаут повержен!", Color(0.4, 1.0, 0.4))
 
 
 func _show_alert(text: String, color: Color) -> void:
