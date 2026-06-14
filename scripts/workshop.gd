@@ -18,6 +18,8 @@ extends Area3D
 @export var heal_amount: float = 25.0   # сколько HP даёт покупка лечения
 @export var turret_ammo_cost: int = 20  # цена пачки боезапаса турелей
 @export var turret_ammo_amount: int = 10  # сколько боезапаса даёт покупка
+@export var fuel_cost: int = 15         # цена пачки топлива для генератора
+@export var fuel_amount: int = 10       # сколько топлива даёт покупка
 
 var _player_inside: bool = false
 var _capture_mode: bool = false
@@ -62,6 +64,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_weapon()
 			KEY_K:
 				buy_turret_ammo()
+			KEY_L:
+				buy_fuel()
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.
@@ -111,6 +115,16 @@ func buy_turret_ammo() -> bool:
 	return false
 
 
+## Покупка топлива для генератора (Этап 4.14) — без топлива турели простаивают.
+func buy_fuel() -> bool:
+	if InventorySystem.spend_money(fuel_cost):
+		InventorySystem.add_resource("fuel", fuel_amount)
+		print("Мастерская: куплено топливо +", fuel_amount, " за ", fuel_cost, "$")
+		return true
+	print("Мастерская: не хватает денег на топливо (нужно ", fuel_cost, "$)")
+	return false
+
+
 ## Покупка следующего оружия из арсенала — цену и владение считает игрок.
 func buy_weapon() -> bool:
 	var player := get_tree().get_first_node_in_group("player")
@@ -128,8 +142,8 @@ func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)" % [
-				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost]
+		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)\n[L] топливо x%d (%d$)" % [
+				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost, fuel_amount, fuel_cost]
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"

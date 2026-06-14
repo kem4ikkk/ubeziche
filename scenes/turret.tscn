@@ -49,3 +49,12 @@ billboard = 1
 no_depth_test = true
 font_size = 28
 text = "Турель 60 / 60"
+
+[node name="PowerLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+billboard = 1
+no_depth_test = true
+font_size = 24
+modulate = Color(0.7, 0.7, 0.7, 1)
+text = "⚡ нет питания"
+visible = false

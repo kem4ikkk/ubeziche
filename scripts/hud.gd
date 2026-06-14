@@ -26,6 +26,7 @@ const RESOURCE_NAMES := {
 	"stone": "Камень",
 	"wall": "Стена",
 	"turret_ammo": "Патроны турелей",
+	"fuel": "Топливо",
 }
 
 
@@ -53,6 +54,8 @@ func _ready() -> void:
 	EventBus.juggernaut_spawned.connect(_on_juggernaut_spawned)
 	EventBus.juggernaut_defeated.connect(_on_juggernaut_defeated)
 	EventBus.evacuation_started.connect(_on_evacuation_started)
+	EventBus.power_lost.connect(_on_power_lost)
+	EventBus.power_restored.connect(_on_power_restored)
 
 
 func _process(delta: float) -> void:
@@ -151,6 +154,15 @@ func _on_juggernaut_defeated() -> void:
 ## Финальная фаза эвакуации (Этап 4.11).
 func _on_evacuation_started() -> void:
 	_show_alert("🚁 ВЫЗВАН ТРАНСПОРТ! Бегите к зоне эвакуации!", Color(0.3, 1.0, 0.7))
+
+
+## Система питания (Этап 4.14).
+func _on_power_lost() -> void:
+	_show_alert("⚡ НЕТ ПИТАНИЯ — турели простаивают!", Color(1.0, 0.3, 0.3))
+
+
+func _on_power_restored() -> void:
+	_show_alert("⚡ Питание восстановлено — турели снова работают", Color(0.4, 1.0, 0.4))
 
 
 func _show_alert(text: String, color: Color) -> void:

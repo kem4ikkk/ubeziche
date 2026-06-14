@@ -10,6 +10,7 @@ extends Area3D
 const COLOR_BY_TYPE := {
 	"wood": Color(0.55, 0.35, 0.15),
 	"stone": Color(0.6, 0.6, 0.6),
+	"fuel": Color(0.95, 0.75, 0.1),
 }
 
 

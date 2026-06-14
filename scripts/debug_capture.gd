@@ -438,6 +438,87 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  боезапас: ", ammo_before_g, " → ", InventorySystem.get_resource("turret_ammo"))
 		_dump_state("ПОСЛЕ гатлинга")
 
+	# 6.97) Система питания (Этап 4.14): генератор питает турели общим топливом
+	# (InventorySystem "fuel"). Без топлива/генератора турели простаивают
+	# (метка "нет питания"), при восстановлении питания — снова стреляют.
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D \
+			and wave_manager != null and wave_manager.zombie_scene != null:
+		print("CLAUDE: проверяю систему питания (4.14)")
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		for t in get_tree().get_nodes_in_group("turret"):
+			t.queue_free()
+		var bs5 := player.get_node("BuildSystem")
+		InventorySystem.add_resource("wood", 10)
+		InventorySystem.add_resource("stone", 10)
+		InventorySystem.add_resource("turret_ammo", 20)
+		(player as Node3D).global_position = Vector3(0, 1, 5)
+		if not bs5.build_mode:
+			bs5.toggle()
+		bs5.select_buildable("Турель")
+		await get_tree().create_timer(0.3).timeout
+		var placed_turret2: bool = bs5.try_place()
+		print("  турель построена: ", placed_turret2)
+		if bs5.build_mode:
+			bs5.toggle()
+		var turret_node := get_tree().get_first_node_in_group("turret")
+
+		# Предустановленный генератор могли снести в предыдущих тестах
+		# (например, 6.9 чистит все "building") — отстраиваем заново.
+		if get_tree().get_nodes_in_group("generator").is_empty():
+			if not bs5.build_mode:
+				bs5.toggle()
+			bs5.select_buildable("Генератор")
+			await get_tree().create_timer(0.3).timeout
+			var placed_gen: bool = bs5.try_place()
+			print("  генератор отстроен заново: ", placed_gen)
+			if bs5.build_mode:
+				bs5.toggle()
+		print("  топливо: ", InventorySystem.get_resource("fuel"),
+				", генераторов в сцене: ", get_tree().get_nodes_in_group("generator").size())
+
+		# С питанием — турель должна навестись и стрелять.
+		var zp: Node = wave_manager.zombie_scene.instantiate()
+		get_tree().current_scene.add_child(zp)
+		(zp as Node3D).global_position = Vector3(0, 1, -3)
+		var hp_p_before: float = zp.get_health() if zp.has_method("get_health") else 0.0
+		await get_tree().create_timer(1.0).timeout
+		var hp_p_after: float = zp.get_health() if is_instance_valid(zp) and zp.has_method("get_health") else -1.0
+		print("  с питанием: HP цели ", hp_p_before, " → ", hp_p_after,
+				", power_label.visible: ", turret_node.power_label.visible if is_instance_valid(turret_node) else "?")
+		if is_instance_valid(zp):
+			zp.queue_free()
+
+		# Отключаем питание: топливо в ноль.
+		InventorySystem.inventory["fuel"] = 0
+		InventorySystem.inventory_changed.emit(InventorySystem.inventory)
+		var zn: Node = wave_manager.zombie_scene.instantiate()
+		get_tree().current_scene.add_child(zn)
+		(zn as Node3D).global_position = Vector3(0, 1, -3)
+		var hp_n_before: float = zn.get_health() if zn.has_method("get_health") else 0.0
+		await get_tree().create_timer(1.0).timeout
+		var hp_n_after: float = zn.get_health() if is_instance_valid(zn) and zn.has_method("get_health") else -1.0
+		print("  без топлива: HP цели ", hp_n_before, " → ", hp_n_after,
+				", power_label.visible: ", turret_node.power_label.visible if is_instance_valid(turret_node) else "?")
+		if is_instance_valid(hud):
+			print("  HUD alert при отключении питания: '", hud.alert_label.text, "'")
+		if is_instance_valid(zn):
+			zn.queue_free()
+
+		# Восстанавливаем топливо — турель снова должна стрелять.
+		InventorySystem.add_resource("fuel", 20)
+		var zr: Node = wave_manager.zombie_scene.instantiate()
+		get_tree().current_scene.add_child(zr)
+		(zr as Node3D).global_position = Vector3(0, 1, -3)
+		var hp_r_before: float = zr.get_health() if zr.has_method("get_health") else 0.0
+		await get_tree().create_timer(1.0).timeout
+		var hp_r_after: float = zr.get_health() if is_instance_valid(zr) and zr.has_method("get_health") else -1.0
+		print("  топливо восстановлено: HP цели ", hp_r_before, " → ", hp_r_after,
+				", power_label.visible: ", turret_node.power_label.visible if is_instance_valid(turret_node) else "?")
+		if is_instance_valid(hud):
+			print("  HUD alert при восстановлении питания: '", hud.alert_label.text, "'")
+		_dump_state("ПОСЛЕ системы питания")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")

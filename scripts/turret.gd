@@ -14,6 +14,7 @@ extends StaticBody3D
 @onready var health: HealthComponent = $HealthComponent
 @onready var hp_label: Label3D = $HPLabel
 @onready var barrel: Node3D = $Barrel
+@onready var power_label: Label3D = $PowerLabel
 
 var _fire_timer: float = 0.0
 
@@ -24,9 +25,14 @@ func _ready() -> void:
 	health.died.connect(_on_died)
 	health.health_changed.connect(_on_health_changed)
 	_on_health_changed(health.current_health, health.max_health)
+	power_label.visible = false
 
 
 func _physics_process(delta: float) -> void:
+	power_label.visible = not _has_power()
+	if power_label.visible:
+		return
+
 	var target := _find_target()
 	if not is_instance_valid(target):
 		return
@@ -51,6 +57,14 @@ func _try_fire(target: Node3D) -> void:
 	if target.has_method("take_damage"):
 		target.take_damage(turret_damage)
 	print("Турель стреляет (-", turret_damage, " HP)")
+
+
+## Есть ли питание (Этап 4.14): нужен живой генератор (группа "generator")
+## и топливо в общем запасе. Без питания турель не наводится и не стреляет.
+func _has_power() -> bool:
+	if InventorySystem.get_resource("fuel") <= 0:
+		return false
+	return not get_tree().get_nodes_in_group("generator").is_empty()
 
 
 ## Ближайший зомби (группа "enemy") в радиусе действия.
