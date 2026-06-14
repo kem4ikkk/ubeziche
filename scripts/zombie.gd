@@ -15,6 +15,11 @@ extends CharacterBody3D
 @export var building_attack_range: float = 2.0  # дистанция атаки построек
 @export var building_attack_damage: float = 8.0  # урон за удар по постройке (Этап 4.4: танк бьёт сильнее)
 
+# Дроп ресурса при смерти (Этап 4.7.1).
+@export var drop_resource_type: String = "stone"
+@export var drop_amount: int = 1
+@export var drop_scene: PackedScene = preload("res://scenes/resource_pickup.tscn")
+
 @onready var health: HealthComponent = $HealthComponent
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -123,5 +128,18 @@ func get_health() -> float:
 func _on_died() -> void:
 	_dead = true
 	print("Зомби уничтожен")
-	# TODO (Этап 3.2.4): здесь будет дроп ресурса.
+	_drop_resource()
 	queue_free()
+
+
+## Дроп ресурса (Этап 4.7.1): создаём подбираемый ресурс на месте смерти.
+func _drop_resource() -> void:
+	if drop_scene == null or drop_amount <= 0:
+		return
+	var pickup := drop_scene.instantiate()
+	get_tree().current_scene.add_child(pickup)
+	pickup.global_position = global_position
+	if "resource_type" in pickup:
+		pickup.resource_type = drop_resource_type
+	if "resource_amount" in pickup:
+		pickup.resource_amount = drop_amount

@@ -90,6 +90,23 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  оружие: ", player.weapons[player.current_weapon_index].name,
 				", обойма: ", player.current_ammo, " / ", player.magazine_size)
 
+	# 4.7) Дроп ресурса с зомби (Этап 4.7.1): добиваем одного из зомби и
+	# проверяем, что на его месте появился подбираемый ресурс.
+	var enemies := get_tree().get_nodes_in_group("enemy")
+	if enemies.size() > 0:
+		var victim: Node = enemies[0]
+		print("CLAUDE: добиваю зомби для проверки дропа")
+		if victim.has_method("take_damage"):
+			victim.take_damage(1000.0)
+		await get_tree().create_timer(0.2).timeout
+		var found_drop := false
+		for node in get_tree().current_scene.get_children():
+			if "resource_type" in node and "resource_amount" in node:
+				print("  дроп: ", node.resource_type, " x", node.resource_amount)
+				found_drop = true
+		if not found_drop:
+			print("  дроп: не найден")
+
 	# 5) Попробуем скрафтить если достаточно ресурсов.
 	if InventorySystem.get_resource("wood") >= 2:
 		print("CLAUDE: крафтим стену (2 дерева → 1 стена)")
