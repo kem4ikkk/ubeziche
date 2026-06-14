@@ -400,6 +400,44 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  боезапас после: ", InventorySystem.get_resource("turret_ammo"))
 		_dump_state("ПОСЛЕ мортиры")
 
+	# 6.96) Гатлинг-турель (Этап 4.8.4): разнообразие турелей — дешёвая ранняя
+	# «Турель» против дорогой «Гатлинг» с намного более высокой скоростью
+	# стрельбы (и расходом боезапаса). Сравниваем DPS по одной цели.
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
+		print("CLAUDE: проверяю гатлинг-турель (4.8.4)")
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		for b in get_tree().get_nodes_in_group("building"):
+			b.queue_free()
+		var bs4 := player.get_node("BuildSystem")
+		InventorySystem.add_resource("wood", 10)
+		InventorySystem.add_resource("stone", 15)
+		InventorySystem.add_resource("turret_ammo", 20)
+		(player as Node3D).global_position = Vector3(0, 1, 5)
+		if not bs4.build_mode:
+			bs4.toggle()
+		bs4.select_buildable("Гатлинг")
+		await get_tree().create_timer(0.3).timeout
+		var placed_gatling: bool = bs4.try_place()
+		print("  гатлинг построен: ", placed_gatling, " (выбрано: ", bs4.current_buildable_name(), ")")
+		if bs4.build_mode:
+			bs4.toggle()
+		var ammo_before_g := InventorySystem.get_resource("turret_ammo")
+		# Одна цель в зоне действия — за 1 секунду гатлинг успевает выстрелить
+		# заметно чаще, чем обычная турель (интервал 0.3с против 0.8с).
+		if wave_manager != null and wave_manager.zombie_scene != null:
+			var zg: Node = wave_manager.zombie_scene.instantiate()
+			get_tree().current_scene.add_child(zg)
+			(zg as Node3D).global_position = Vector3(0, 1, -5)
+			var hp_before_g: float = zg.get_health() if zg.has_method("get_health") else 0.0
+			await get_tree().create_timer(1.0).timeout
+			var hp_after_g := -1.0
+			if is_instance_valid(zg) and zg.has_method("get_health"):
+				hp_after_g = zg.get_health()
+			print("  цель гатлинга за 1с: HP ", hp_before_g, " → ", hp_after_g, " (-1 = уничтожена)")
+		print("  боезапас: ", ammo_before_g, " → ", InventorySystem.get_resource("turret_ammo"))
+		_dump_state("ПОСЛЕ гатлинга")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")

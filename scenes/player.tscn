@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/health_component.gd" id="2_health"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/infirmary.tscn" id="6_infirmary"]
 [ext_resource type="PackedScene" path="res://scenes/storage.tscn" id="7_storage"]
 [ext_resource type="PackedScene" path="res://scenes/mortar_turret.tscn" id="8_mortar"]
+[ext_resource type="PackedScene" path="res://scenes/gatling_turret.tscn" id="9_gatling"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.5
@@ -48,3 +49,4 @@ turret_scene = ExtResource("5_turret")
 infirmary_scene = ExtResource("6_infirmary")
 storage_scene = ExtResource("7_storage")
 mortar_scene = ExtResource("8_mortar")
+gatling_scene = ExtResource("9_gatling")
