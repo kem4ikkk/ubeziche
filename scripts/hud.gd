@@ -10,6 +10,7 @@ extends CanvasLayer
 @onready var result_screen: ColorRect = $ResultScreen
 @onready var result_label: Label = $ResultScreen/ResultLabel
 @onready var alert_label: Label = $AlertLabel
+@onready var evac_label: Label = $EvacLabel
 
 const ALERT_DURATION := 2.5  ## сколько секунд держим тревожное сообщение (Этап 4.9)
 
@@ -51,6 +52,7 @@ func _ready() -> void:
 	EventBus.building_damaged.connect(_on_building_damaged)
 	EventBus.juggernaut_spawned.connect(_on_juggernaut_spawned)
 	EventBus.juggernaut_defeated.connect(_on_juggernaut_defeated)
+	EventBus.evacuation_started.connect(_on_evacuation_started)
 
 
 func _process(delta: float) -> void:
@@ -81,6 +83,15 @@ func _process(delta: float) -> void:
 		_alert_timer -= delta
 		if _alert_timer <= 0.0:
 			alert_label.visible = false
+
+	# Финальная фаза эвакуации (Этап 4.11): обратный отсчёт до зоны.
+	if is_instance_valid(_game_state_manager) and _game_state_manager.evac_active:
+		var t := int(ceil(_game_state_manager.get_evac_time_left()))
+		evac_label.text = "🚁 Эвакуация: %d с — к зелёному лучу!" % t
+		evac_label.modulate = Color(0.3, 1.0, 0.7) if t > 10 else Color(1.0, 0.5, 0.2)
+		evac_label.visible = true
+	else:
+		evac_label.visible = false
 
 
 func _on_game_over(victory: bool) -> void:
@@ -135,6 +146,11 @@ func _on_juggernaut_spawned() -> void:
 
 func _on_juggernaut_defeated() -> void:
 	_show_alert("Джаггернаут повержен!", Color(0.4, 1.0, 0.4))
+
+
+## Финальная фаза эвакуации (Этап 4.11).
+func _on_evacuation_started() -> void:
+	_show_alert("🚁 ВЫЗВАН ТРАНСПОРТ! Бегите к зоне эвакуации!", Color(0.3, 1.0, 0.7))
 
 
 func _show_alert(text: String, color: Color) -> void:

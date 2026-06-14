@@ -11,3 +11,7 @@ signal building_damaged(building_name: String)
 ## при его появлении и сообщение о победе при его уничтожении.
 signal juggernaut_spawned()
 signal juggernaut_defeated()
+
+## Финальная фаза эвакуации (Этап 4.11): вызван транспорт — HUD показывает
+## предупреждение и обратный отсчёт до зоны эвакуации.
+signal evacuation_started()

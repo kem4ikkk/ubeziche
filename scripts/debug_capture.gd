@@ -359,6 +359,33 @@ func _run_capture(args: PackedStringArray) -> void:
 			player.heal(1000.0)  # лечим, чтобы игрок не погиб до снимка
 		_dump_state("ПОСЛЕ джаггернаута")
 
+	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
+	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
+	var game_state := get_tree().get_first_node_in_group("game_state_manager")
+	var evac_zone := get_tree().get_first_node_in_group("evacuation_zone")
+	if is_instance_valid(game_state) and is_instance_valid(evac_zone) and is_instance_valid(player) and player is Node3D and not game_state.is_game_over:
+		print("CLAUDE: проверяю эвакуацию (4.11)")
+		# Чистим врагов и лечим игрока, чтобы он не погиб во время теста.
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		# Симулируем зачистку финальной волны — должна начаться эвакуация.
+		print("  зона до вызова транспорта видима: ", (evac_zone as Node3D).visible)
+		game_state._on_wave_cleared(game_state.victory_waves)
+		await get_tree().create_timer(0.1).timeout
+		print("  evac_active: ", game_state.evac_active, ", осталось ", snappedf(game_state.get_evac_time_left(), 0.1), " c")
+		print("  зона эвакуации видима: ", (evac_zone as Node3D).visible)
+		if is_instance_valid(hud):
+			print("  HUD alert при вызове транспорта: '", hud.alert_label.text, "'")
+			print("  HUD evac_label: '", hud.evac_label.text, "', видим: ", hud.evac_label.visible)
+		# Игрок добегает до зоны эвакуации — должна сработать победа.
+		(player as Node3D).global_position = (evac_zone as Node3D).global_position + Vector3(0, 1, 0)
+		await get_tree().create_timer(0.3).timeout
+		var result_text: String = hud.result_label.text if is_instance_valid(hud) else "?"
+		print("  после входа в зону: game_over=", game_state.is_game_over, ", HUD итог: '", result_text, "'")
+		_dump_state("ПОСЛЕ эвакуации")
+
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
