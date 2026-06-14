@@ -359,6 +359,47 @@ func _run_capture(args: PackedStringArray) -> void:
 			player.heal(1000.0)  # лечим, чтобы игрок не погиб до снимка
 		_dump_state("ПОСЛЕ джаггернаута")
 
+	# 6.95) Мортирная турель (Этап 4.8.3): строим мортиру, спавним кучку
+	# зомби рядом друг с другом — выстрел мортиры должен задеть всех
+	# сплеш-уроном (по площади), а не только ближайшую цель.
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
+		print("CLAUDE: проверяю мортиру (4.8.3)")
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		for b in get_tree().get_nodes_in_group("building"):
+			b.queue_free()
+		var bs3 := player.get_node("BuildSystem")
+		InventorySystem.add_resource("wood", 10)
+		InventorySystem.add_resource("stone", 10)
+		InventorySystem.add_resource("turret_ammo", 10)
+		(player as Node3D).global_position = Vector3(0, 1, 5)
+		if not bs3.build_mode:
+			bs3.toggle()
+		bs3.select_buildable("Мортира")
+		await get_tree().create_timer(0.3).timeout
+		var placed_mortar: bool = bs3.try_place()
+		print("  мортира построена: ", placed_mortar, " (выбрано: ", bs3.current_buildable_name(), ")")
+		if bs3.build_mode:
+			bs3.toggle()
+		# Кучка зомби рядом друг с другом — все должны попасть в сплеш-радиус.
+		var hp_list_before: Array = []
+		var cluster: Array = []
+		if wave_manager != null and wave_manager.zombie_scene != null:
+			for offset in [Vector3(0, 1, -5), Vector3(1, 1, -5), Vector3(-1, 1, -5)]:
+				var zc: Node = wave_manager.zombie_scene.instantiate()
+				get_tree().current_scene.add_child(zc)
+				(zc as Node3D).global_position = offset
+				cluster.append(zc)
+				hp_list_before.append(zc.get_health() if zc.has_method("get_health") else 0.0)
+		print("  HP кучки до выстрела: ", hp_list_before)
+		await get_tree().create_timer(3.0).timeout
+		var hp_list_after: Array = []
+		for zc in cluster:
+			hp_list_after.append(zc.get_health() if is_instance_valid(zc) and zc.has_method("get_health") else -1.0)
+		print("  HP кучки после мортиры: ", hp_list_after, " (-1 = уничтожен)")
+		print("  боезапас после: ", InventorySystem.get_resource("turret_ammo"))
+		_dump_state("ПОСЛЕ мортиры")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")

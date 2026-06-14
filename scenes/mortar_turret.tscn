@@ -1,0 +1,57 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/mortar_turret.gd" id="1_mortar"]
+[ext_resource type="Script" path="res://scripts/health_component.gd" id="2_health"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_base"]
+size = Vector3(1.4, 0.7, 1.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_base"]
+size = Vector3(1.4, 0.7, 1.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_base"]
+albedo_color = Color(0.32, 0.36, 0.22, 1)
+metallic = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_barrel"]
+size = Vector3(0.4, 0.4, 1.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_barrel"]
+albedo_color = Color(0.12, 0.13, 0.1, 1)
+
+[node name="MortarTurret" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_mortar")
+fire_range = 14.0
+fire_interval = 2.5
+turret_damage = 18.0
+splash_radius = 3.0
+splash_damage = 10.0
+ammo_cost = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_base")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_base")
+surface_material_override/0 = SubResource("StandardMaterial3D_base")
+
+[node name="Barrel" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+
+[node name="BarrelMesh" type="MeshInstance3D" parent="Barrel"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
+mesh = SubResource("BoxMesh_barrel")
+surface_material_override/0 = SubResource("StandardMaterial3D_barrel")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 90.0
+
+[node name="HPLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+billboard = 1
+no_depth_test = true
+font_size = 28
+text = "Мортира 90 / 90"

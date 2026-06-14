@@ -13,6 +13,7 @@ const PLACE_DISTANCE := 3.0
 @export var turret_scene: PackedScene
 @export var infirmary_scene: PackedScene
 @export var storage_scene: PackedScene
+@export var mortar_scene: PackedScene
 
 var build_mode: bool = false
 var _ghost: Node3D
@@ -29,6 +30,7 @@ func _ready() -> void:
 		{"name": "Турель", "scene": turret_scene, "cost": {"stone": 3, "wood": 2}},
 		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "stone": 3}},
 		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 4, "stone": 1}},
+		{"name": "Мортира", "scene": mortar_scene, "cost": {"stone": 8, "wood": 4}},
 	]
 	_rebuild_ghost()
 
