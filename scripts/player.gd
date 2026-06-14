@@ -8,7 +8,7 @@ extends CharacterBody3D
 ##   ЛКМ   — выстрел (если курсор захвачен) / захватить курсор
 ##   R     — перезарядка оружия
 ##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
-##   1/2   — переключить оружие (только купленное; в начале есть лишь пистолет)
+##   1-5   — переключить оружие (только купленное; в начале есть лишь пистолет)
 ##   Esc   — отпустить курсор
 ## Крафт и магазин (клавиши C / G / H / J) теперь работают только рядом с
 ## мастерской — см. scripts/workshop.gd (Этап 4.7.3). Оружие покупается там же.
@@ -24,8 +24,11 @@ signal weapon_changed(weapon_name: String)
 # Виды оружия (Этап 4.6.2): пистолет — сбалансирован, дробовик — несколько
 # пуль с разбросом, больше урона вблизи, но короче дальность и меньше обойма.
 var weapons: Array[Dictionary] = [
-	{"name": "Пистолет", "damage": 10.0, "magazine_size": 8, "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0, "price": 0},
-	{"name": "Дробовик", "damage": 6.0, "magazine_size": 4, "reload_time": 2.2, "range": 20.0, "pellets": 5, "spread": 0.05, "price": 50},
+	{"name": "Пистолет",          "damage": 10.0, "magazine_size": 8,  "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0,  "price": 0},
+	{"name": "Двойные пистолеты", "damage": 9.0,  "magazine_size": 16, "reload_time": 2.0, "range": 90.0,  "pellets": 1, "spread": 0.01, "price": 40},
+	{"name": "Дробовик",          "damage": 6.0,  "magazine_size": 4,  "reload_time": 2.2, "range": 20.0,  "pellets": 5, "spread": 0.05, "price": 50},
+	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90},
+	{"name": "Снайперка",         "damage": 40.0, "magazine_size": 5,  "reload_time": 3.0, "range": 300.0, "pellets": 1, "spread": 0.0,  "price": 120},
 ]
 var current_weapon_index: int = 0
 var _ammo_in_weapon: Array[int] = []
@@ -108,11 +111,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		reload()
 
-	# 1/2 — переключить оружие (Этап 4.6.2).
-	if event is InputEventKey and event.pressed and event.keycode == KEY_1:
-		switch_weapon(0)
-	if event is InputEventKey and event.pressed and event.keycode == KEY_2:
-		switch_weapon(1)
+	# 1-5 — переключить оружие (Этап 4.6.2; арсенал расширен).
+	if event is InputEventKey and event.pressed and event.keycode >= KEY_1 and event.keycode <= KEY_5:
+		switch_weapon(event.keycode - KEY_1)
 
 	# F — отремонтировать постройку, на которую смотрим.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
@@ -241,6 +242,15 @@ func switch_weapon(index: int) -> void:
 ## Куплено ли оружие с индексом index (Этап 4.7.2).
 func owns_weapon(index: int) -> bool:
 	return index >= 0 and index < _owned.size() and _owned[index]
+
+
+## Индекс следующего ещё не купленного оружия (по порядку/цене) или -1,
+## если всё куплено. Мастерская продаёт оружие именно в этом порядке.
+func next_unowned_weapon_index() -> int:
+	for i in weapons.size():
+		if not _owned[i]:
+			return i
+	return -1
 
 
 ## Покупка оружия за деньги (Этап 4.7.2): доступно в мастерской.

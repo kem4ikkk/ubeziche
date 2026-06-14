@@ -73,34 +73,30 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(player.reload_time + 0.2).timeout
 		print("  player_ammo после перезарядки: ", player.current_ammo, " / ", player.magazine_size)
 
-	# 4.6) Виды оружия + покупка (Этап 4.6.2 / 4.7.2): в начале только пистолет.
-	# Сначала пробуем переключиться на дробовик БЕЗ покупки (должно отказать),
-	# затем покупаем его за деньги в мастерской и проверяем стрельбу.
+	# 4.6) Арсенал + покупка оружия (Этап 4.6.2 / 4.7.2): в начале только
+	# пистолет; остальное покупается в мастерской по возрастанию цены.
 	if is_instance_valid(player) and player.has_method("switch_weapon"):
-		print("CLAUDE: пробую переключиться на дробовик ДО покупки")
+		print("CLAUDE: пробую переключиться на оружие №2 ДО покупки")
 		player.switch_weapon(1)
 		print("  текущее оружие (ожидается Пистолет): ", player.weapons[player.current_weapon_index].name)
-		print("CLAUDE: покупаю дробовик в мастерской")
-		InventorySystem.add_money(60)  # в тесте денег к этому моменту мало — добавим
+		print("CLAUDE: покупаю весь арсенал в мастерской")
+		InventorySystem.add_money(400)  # в тесте денег мало — добавим на весь арсенал
 		var workshop_w := get_tree().get_first_node_in_group("workshop")
-		var money_before_w := InventorySystem.get_money()
-		var bought_weapon := false
-		if workshop_w != null:
-			bought_weapon = workshop_w.buy_weapon()
-		else:
-			bought_weapon = player.buy_weapon(1)
-		print("  покупка дробовика: ", bought_weapon, " | деньги ", money_before_w, " → ",
-				InventorySystem.get_money(), "$ | оружие сейчас: ", player.weapons[player.current_weapon_index].name)
-		print("  параметры: урон ", player.damage, ", обойма ", player.current_ammo, " / ", player.magazine_size,
-				", дальность ", player.shoot_range)
-		print("CLAUDE: выстрел из дробовика")
-		player.shoot()
-		await get_tree().create_timer(0.1).timeout
-		print("  обойма дробовика после выстрела: ", player.current_ammo, " / ", player.magazine_size)
-		print("CLAUDE: переключаюсь обратно на пистолет")
+		while workshop_w != null:
+			var money_before_w := InventorySystem.get_money()
+			if not workshop_w.buy_weapon():
+				break
+			print("  куплено: ", player.weapons[player.current_weapon_index].name,
+					" | деньги ", money_before_w, " → ", InventorySystem.get_money(), "$")
+		print("CLAUDE: проверяю каждое оружие в арсенале")
+		for wi in player.weapons.size():
+			player.switch_weapon(wi)
+			var w: Dictionary = player.weapons[wi]
+			print("  [", wi + 1, "] ", w.name, " — урон ", player.damage,
+					", обойма ", player.current_ammo, " / ", player.magazine_size,
+					", дальность ", player.shoot_range, ", пуль ", w.get("pellets", 1))
+		print("CLAUDE: возвращаюсь на пистолет")
 		player.switch_weapon(0)
-		print("  оружие: ", player.weapons[player.current_weapon_index].name,
-				", обойма: ", player.current_ammo, " / ", player.magazine_size)
 
 	# Перед проверкой остальных фич зачищаем оставшихся зомби волны и лечим
 	# игрока — иначе он может случайно погибнуть, пока стоит на месте, и
