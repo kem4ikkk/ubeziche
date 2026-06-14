@@ -1,32 +1,36 @@
 extends Node3D
 
-## Система строительства-минимума (Этап 3.5).
+## Система строительства (Этап 3.5; расширена в 4.8.1).
 ## B — переключить режим постройки (показывает призрак-превью).
-## ЛКМ в режиме постройки — построить стену (если хватает ресурса "wall").
+## V — сменить тип постройки (стена ↔ турель), пока режим включён.
+## ЛКМ в режиме постройки — построить выбранное здание (если хватает ресурсов).
 ## Позиция привязывается к сетке GRID_SIZE x GRID_SIZE.
 
 const GRID_SIZE := 1.0
 const PLACE_DISTANCE := 3.0
-const BUILD_COST := {"wall": 1}
 
 @export var wall_scene: PackedScene
+@export var turret_scene: PackedScene
 
 var build_mode: bool = false
 var _ghost: Node3D
+# Доступные постройки: имя, сцена и стоимость в ресурсах.
+var _buildables: Array[Dictionary] = []
+var _current: int = 0
 
 @onready var _player: Node3D = get_parent() as Node3D
 
 
 func _ready() -> void:
-	_ghost = wall_scene.instantiate()
-	_ghost.set_script(null)  # призрак не должен жить как настоящая стена
-	_make_ghost(_ghost)
-	_ghost.visible = false
-	get_tree().current_scene.add_child.call_deferred(_ghost)
+	_buildables = [
+		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}},
+		{"name": "Турель", "scene": turret_scene, "cost": {"stone": 3, "wood": 2}},
+	]
+	_rebuild_ghost()
 
 
 func _process(_delta: float) -> void:
-	if not build_mode:
+	if not build_mode or not is_instance_valid(_ghost) or not _ghost.is_inside_tree():
 		return
 	_ghost.global_position = _get_target_position()
 
@@ -34,28 +38,58 @@ func _process(_delta: float) -> void:
 ## Включить/выключить режим постройки.
 func toggle() -> void:
 	build_mode = not build_mode
-	_ghost.visible = build_mode
-	if build_mode:
-		_ghost.global_position = _get_target_position()
+	if is_instance_valid(_ghost):
+		_ghost.visible = build_mode
+		if build_mode and _ghost.is_inside_tree():
+			_ghost.global_position = _get_target_position()
 
 
-## Построить стену в позиции призрака (если хватает ресурсов).
+## Сменить выбранный тип постройки (по кругу), пока включён режим стройки.
+func cycle_buildable() -> void:
+	if not build_mode:
+		return
+	_current = (_current + 1) % _buildables.size()
+	_rebuild_ghost()
+	print("CLAUDE: выбрана постройка: ", current_buildable_name())
+
+
+## Имя текущего выбранного здания (для HUD/тестов).
+func current_buildable_name() -> String:
+	return _buildables[_current].name
+
+
+## Построить выбранное здание в позиции призрака (если хватает ресурсов).
 func try_place() -> bool:
 	if not build_mode:
 		return false
 
-	for resource_type in BUILD_COST:
-		if InventorySystem.get_resource(resource_type) < BUILD_COST[resource_type]:
-			print("CLAUDE: не хватает ресурсов для постройки")
+	var buildable: Dictionary = _buildables[_current]
+	var cost: Dictionary = buildable.cost
+	for resource_type in cost:
+		if InventorySystem.get_resource(resource_type) < cost[resource_type]:
+			print("CLAUDE: не хватает ресурсов для постройки (", buildable.name, ")")
 			return false
 
-	for resource_type in BUILD_COST:
-		InventorySystem.use_resource(resource_type, BUILD_COST[resource_type])
+	for resource_type in cost:
+		InventorySystem.use_resource(resource_type, cost[resource_type])
 
-	var wall := wall_scene.instantiate()
-	get_tree().current_scene.add_child(wall)
-	wall.global_position = _ghost.global_position
+	var scene: PackedScene = buildable.scene
+	var building := scene.instantiate()
+	get_tree().current_scene.add_child(building)
+	building.global_position = _ghost.global_position
 	return true
+
+
+## Пересобрать призрак-превью под текущий выбранный тип постройки.
+func _rebuild_ghost() -> void:
+	if is_instance_valid(_ghost):
+		_ghost.queue_free()
+	var scene: PackedScene = _buildables[_current].scene
+	_ghost = scene.instantiate()
+	_ghost.set_script(null)  # призрак не должен жить как настоящая постройка
+	_make_ghost(_ghost)
+	_ghost.visible = build_mode
+	get_tree().current_scene.add_child.call_deferred(_ghost)
 
 
 ## Точка перед игроком (по направлению взгляда по горизонтали), привязанная к сетке.

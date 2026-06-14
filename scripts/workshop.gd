@@ -6,6 +6,7 @@ extends Area3D
 ##   G — купить стену за деньги                              [денежная экономика]
 ##   H — купить лечение за деньги (+HP)                      [денежная экономика]
 ##   J — купить следующее оружие из арсенала                 [денежная экономика]
+##   K — купить боезапас турелей (расходник)                 [денежная экономика]
 ##
 ## Так замыкаются обе ветки экономики (Этап 4.7.2): дерево/камень тратятся
 ## на крафт, а деньги (капают за убийство зомби) — на покупки в мастерской.
@@ -15,6 +16,8 @@ extends Area3D
 @export var buy_wall_cost: int = 25     # цена стены за деньги
 @export var heal_cost: int = 30         # цена одной покупки лечения
 @export var heal_amount: float = 25.0   # сколько HP даёт покупка лечения
+@export var turret_ammo_cost: int = 20  # цена пачки боезапаса турелей
+@export var turret_ammo_amount: int = 10  # сколько боезапаса даёт покупка
 
 var _player_inside: bool = false
 var _capture_mode: bool = false
@@ -57,6 +60,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_heal()
 			KEY_J:
 				buy_weapon()
+			KEY_K:
+				buy_turret_ammo()
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.
@@ -96,6 +101,16 @@ func buy_heal() -> bool:
 	return false
 
 
+## Покупка боезапаса турелей (расходник для построенных турелей).
+func buy_turret_ammo() -> bool:
+	if InventorySystem.spend_money(turret_ammo_cost):
+		InventorySystem.add_resource("turret_ammo", turret_ammo_amount)
+		print("Мастерская: куплен боезапас турелей +", turret_ammo_amount, " за ", turret_ammo_cost, "$")
+		return true
+	print("Мастерская: не хватает денег на боезапас турелей (нужно ", turret_ammo_cost, "$)")
+	return false
+
+
 ## Покупка следующего оружия из арсенала — цену и владение считает игрок.
 func buy_weapon() -> bool:
 	var player := get_tree().get_first_node_in_group("player")
@@ -113,8 +128,8 @@ func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s" % [
-				buy_wall_cost, heal_cost, _weapon_offer_text()]
+		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)" % [
+				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost]
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"

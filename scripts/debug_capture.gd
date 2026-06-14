@@ -206,6 +206,47 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	_dump_state("ПОСЛЕ спавна танка")
 
+	# 6.7) Турель (Этап 4.8.1): выбираем турель в режиме постройки, строим её,
+	# покупаем боезапас и проверяем, что она сама стреляет по зомби.
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
+		var bs := player.get_node("BuildSystem")
+		print("CLAUDE: строю турель")
+		InventorySystem.add_resource("wood", 5)
+		InventorySystem.add_resource("stone", 5)
+		(player as Node3D).global_position = Vector3(0, 1, 5)
+		if not bs.build_mode:
+			bs.toggle()
+		for _i in 3:  # циклим тип постройки до турели
+			if bs.current_buildable_name() == "Турель":
+				break
+			bs.cycle_buildable()
+		await get_tree().create_timer(0.3).timeout
+		print("  выбранная постройка: ", bs.current_buildable_name())
+		var placed_turret: bool = bs.try_place()
+		print("  турель построена: ", placed_turret)
+		if bs.build_mode:
+			bs.toggle()
+		# Покупаем боезапас турелей в мастерской.
+		var workshop_t := get_tree().get_first_node_in_group("workshop")
+		InventorySystem.add_money(50)
+		if workshop_t != null:
+			workshop_t.buy_turret_ammo()
+		var ammo_before := InventorySystem.get_resource("turret_ammo")
+		print("  боезапас турелей: ", ammo_before)
+		# Спавним зомби в зоне действия турели и ждём авто-стрельбу.
+		if wave_manager != null and wave_manager.zombie_scene != null:
+			var z: Node = wave_manager.zombie_scene.instantiate()
+			get_tree().current_scene.add_child(z)
+			(z as Node3D).global_position = Vector3(0, 1, -3)
+			var hp_before: float = z.get_health() if z.has_method("get_health") else 0.0
+			await get_tree().create_timer(2.5).timeout
+			var hp_after := -1.0
+			if is_instance_valid(z) and z.has_method("get_health"):
+				hp_after = z.get_health()
+			print("  цель турели: HP ", hp_before, " → ", hp_after, " (-1 = уничтожена)")
+		print("  боезапас после стрельбы: ", ammo_before, " → ", InventorySystem.get_resource("turret_ammo"))
+		_dump_state("ПОСЛЕ турели")
+
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()

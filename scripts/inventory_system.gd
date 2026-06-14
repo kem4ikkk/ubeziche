@@ -9,6 +9,7 @@ signal money_changed(amount: int)  ## деньги — вторая валюта
 var inventory: Dictionary = {
 	"wood": 0,
 	"stone": 0,
+	"turret_ammo": 0,  # расходник для турелей (Этап 4.8.1)
 }
 
 # Деньги (Этап 4.7.2): отдельная валюта, не входит в inventory.

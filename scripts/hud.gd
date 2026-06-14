@@ -14,6 +14,14 @@ var _day_night_cycle: Node
 var _game_state_manager: Node
 var _weapon_name: String = "Пистолет"
 
+# Понятные русские названия ресурсов для HUD.
+const RESOURCE_NAMES := {
+	"wood": "Дерево",
+	"stone": "Камень",
+	"wall": "Стена",
+	"turret_ammo": "Патроны турелей",
+}
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -60,7 +68,8 @@ func _on_game_over(victory: bool) -> void:
 func _on_inventory_changed(inventory: Dictionary) -> void:
 	var text = ""
 	for resource_type in inventory:
-		text += "%s: %d\n" % [resource_type.capitalize(), inventory[resource_type]]
+		var label_name: String = RESOURCE_NAMES.get(resource_type, resource_type.capitalize())
+		text += "%s: %d\n" % [label_name, inventory[resource_type]]
 	inventory_label.text = text.strip_edges()
 
 

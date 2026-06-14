@@ -9,6 +9,7 @@ extends CharacterBody3D
 ##   R     — перезарядка оружия
 ##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
 ##   1-5   — переключить оружие (только купленное; в начале есть лишь пистолет)
+##   B     — режим постройки; V — сменить тип (стена/турель); ЛКМ — поставить
 ##   Esc   — отпустить курсор
 ## Крафт и магазин (клавиши C / G / H / J) теперь работают только рядом с
 ## мастерской — см. scripts/workshop.gd (Этап 4.7.3). Оружие покупается там же.
@@ -106,6 +107,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	# B — переключить режим постройки.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		build_system.toggle()
+
+	# V — сменить тип постройки (стена ↔ турель) в режиме стройки (Этап 4.8.1).
+	if event is InputEventKey and event.pressed and event.keycode == KEY_V:
+		build_system.cycle_buildable()
 
 	# R — перезарядить оружие.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
