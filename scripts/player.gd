@@ -10,6 +10,8 @@ extends CharacterBody3D
 ##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
 ##   1/2   — переключить оружие (пистолет / дробовик)
 ##   Esc   — отпустить курсор
+## Крафт и магазин (клавиши C / G / H) теперь работают только рядом с
+## мастерской — см. scripts/workshop.gd (Этап 4.7.3).
 
 signal ammo_changed(current: int, magazine: int)
 signal weapon_changed(weapon_name: String)
@@ -96,13 +98,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	# B — переключить режим постройки.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		build_system.toggle()
-
-	# C — скрафтить стену (2 дерева → 1 стена).
-	if event is InputEventKey and event.pressed and event.keycode == KEY_C:
-		if CraftSystem.craft("wall"):
-			print("Скрафтили стену")
-		else:
-			print("Не хватает ресурсов для крафта стены")
 
 	# R — перезарядить оружие.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
@@ -284,6 +279,16 @@ func repair_target() -> void:
 ## Урон по игроку (например, от зомби).
 func take_damage(amount: float) -> void:
 	health.take_damage(amount)
+
+
+## Лечение игрока (Этап 4.7.3: покупка лечения в мастерской за деньги).
+func heal(amount: float) -> void:
+	health.heal(amount)
+
+
+## Полное ли здоровье — чтобы мастерская не продавала бесполезное лечение.
+func is_full_health() -> bool:
+	return health.current_health >= health.max_health
 
 
 ## Текущее здоровье — удобно для HUD и для отладочного дампа состояния.

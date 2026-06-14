@@ -90,6 +90,15 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  оружие: ", player.weapons[player.current_weapon_index].name,
 				", обойма: ", player.current_ammo, " / ", player.magazine_size)
 
+	# Перед проверкой остальных фич зачищаем оставшихся зомби волны и лечим
+	# игрока — иначе он может случайно погибнуть, пока стоит на месте, и
+	# проверки дропа/экономики/постройки пойдут на «мёртвой» паузе.
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		enemy.queue_free()
+	if is_instance_valid(player) and player.has_method("heal"):
+		player.heal(1000.0)
+	await get_tree().create_timer(0.1).timeout
+
 	# 4.7) Дроп ресурса с зомби (Этап 4.7.1): дроп случайный (drop_chance),
 	# поэтому добиваем несколько зомби-танков подряд, пока не выпадет ресурс.
 	if wave_manager != null and wave_manager.tank_zombie_scene != null:
@@ -106,6 +115,43 @@ func _run_capture(args: PackedStringArray) -> void:
 				print("  дроп: ", node.resource_type, " x", node.resource_amount)
 				drops_found += 1
 		print("  дропов выпало: ", drops_found, " из 6 (шанс 0.5)")
+
+	# 4.8) Двойная экономика + мастерская (Этап 4.7.2 / 4.7.3): деньги капают
+	# за убийство зомби, в мастерской их тратим. Методы дёргаем напрямую
+	# (в прогоне реальный ввод и зоны не работают).
+	print("CLAUDE: проверяю двойную экономику и мастерскую (4.7.2 / 4.7.3)")
+	print("  деньги после убийств зомби: ", InventorySystem.get_money(), "$")
+	var workshop := get_tree().get_first_node_in_group("workshop")
+	if workshop != null:
+		# Крафт стены из ресурсов (даём дерево, чтобы точно хватило).
+		InventorySystem.add_resource("wood", 2)
+		var wood_before := InventorySystem.get_resource("wood")
+		var crafted: bool = workshop.craft_wall()
+		print("  крафт стены (ресурсы): ", crafted, " | дерево ", wood_before, " → ",
+				InventorySystem.get_resource("wood"), ", стен: ", InventorySystem.get_resource("wall"))
+		# Покупка стены за деньги.
+		var money_before := InventorySystem.get_money()
+		var walls_before := InventorySystem.get_resource("wall")
+		var bought: bool = workshop.buy_wall()
+		print("  покупка стены за деньги: ", bought, " | деньги ", money_before, " → ",
+				InventorySystem.get_money(), "$, стен ", walls_before, " → ", InventorySystem.get_resource("wall"))
+		# Лечение за деньги: сначала раним игрока, потом лечим.
+		if is_instance_valid(player) and player.has_method("take_damage"):
+			player.take_damage(40.0)
+		var hp_before: float = player.get_health() if is_instance_valid(player) else 0.0
+		var money_before2 := InventorySystem.get_money()
+		var healed: bool = workshop.buy_heal()
+		var hp_after: float = player.get_health() if is_instance_valid(player) else 0.0
+		print("  покупка лечения: ", healed, " | HP ", hp_before, " → ", hp_after,
+				", деньги ", money_before2, " → ", InventorySystem.get_money(), "$")
+		# Проверяем зону мастерской: подводим игрока вплотную к верстаку.
+		if is_instance_valid(player) and player is Node3D:
+			(player as Node3D).global_position = Vector3(-3, 1, 3)
+			await get_tree().create_timer(0.2).timeout
+			if "_player_inside" in workshop:
+				print("  игрок в зоне мастерской: ", workshop._player_inside)
+	else:
+		print("  CLAUDE: мастерская не найдена!")
 
 	# 5) Попробуем скрафтить если достаточно ресурсов.
 	if InventorySystem.get_resource("wood") >= 2:
@@ -199,4 +245,5 @@ func _dump_state(label: String) -> void:
 	for resource_type in InventorySystem.inventory:
 		var amount = InventorySystem.inventory[resource_type]
 		print("  inventory[%s]: %d" % [resource_type, amount])
+	print("  money: ", InventorySystem.money, "$")
 	print("CLAUDE_STATE_END")
