@@ -11,6 +11,8 @@ const PLACE_DISTANCE := 3.0
 
 @export var wall_scene: PackedScene
 @export var turret_scene: PackedScene
+@export var infirmary_scene: PackedScene
+@export var storage_scene: PackedScene
 
 var build_mode: bool = false
 var _ghost: Node3D
@@ -25,6 +27,8 @@ func _ready() -> void:
 	_buildables = [
 		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}},
 		{"name": "Турель", "scene": turret_scene, "cost": {"stone": 3, "wood": 2}},
+		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "stone": 3}},
+		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 4, "stone": 1}},
 	]
 	_rebuild_ghost()
 
@@ -56,6 +60,16 @@ func cycle_buildable() -> void:
 ## Имя текущего выбранного здания (для HUD/тестов).
 func current_buildable_name() -> String:
 	return _buildables[_current].name
+
+
+## Выбрать здание по имени (для тестов / будущего меню постройки).
+func select_buildable(building_name: String) -> bool:
+	for i in _buildables.size():
+		if _buildables[i].name == building_name:
+			_current = i
+			_rebuild_ghost()
+			return true
+	return false
 
 
 ## Построить выбранное здание в позиции призрака (если хватает ресурсов).

@@ -216,10 +216,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		(player as Node3D).global_position = Vector3(0, 1, 5)
 		if not bs.build_mode:
 			bs.toggle()
-		for _i in 3:  # циклим тип постройки до турели
-			if bs.current_buildable_name() == "Турель":
-				break
-			bs.cycle_buildable()
+		bs.select_buildable("Турель")
 		await get_tree().create_timer(0.3).timeout
 		print("  выбранная постройка: ", bs.current_buildable_name())
 		var placed_turret: bool = bs.try_place()
@@ -246,6 +243,50 @@ func _run_capture(args: PackedStringArray) -> void:
 			print("  цель турели: HP ", hp_before, " → ", hp_after, " (-1 = уничтожена)")
 		print("  боезапас после стрельбы: ", ammo_before, " → ", InventorySystem.get_resource("turret_ammo"))
 		_dump_state("ПОСЛЕ турели")
+
+	# 6.8) Лазарет и склад (Этап 4.8.2): строим оба и проверяем, что лазарет
+	# лечит игрока рядом, а склад со временем пополняет боезапас турелей.
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
+		var bs2 := player.get_node("BuildSystem")
+		# Чистим врагов, чтобы турель не тратила боезапас во время проверки склада.
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		InventorySystem.add_resource("wood", 10)
+		InventorySystem.add_resource("stone", 10)
+		# --- Лазарет ---
+		print("CLAUDE: строю лазарет")
+		(player as Node3D).global_position = Vector3(6, 1, 5)
+		if not bs2.build_mode:
+			bs2.toggle()
+		bs2.select_buildable("Лазарет")
+		await get_tree().create_timer(0.3).timeout
+		var placed_inf: bool = bs2.try_place()
+		print("  лазарет построен: ", placed_inf, " (выбрано: ", bs2.current_buildable_name(), ")")
+		# Раним игрока и ставим его вплотную к лазарету — должен лечить.
+		if player.has_method("take_damage"):
+			player.take_damage(40.0)
+		var hp_before_heal: float = player.get_health()
+		(player as Node3D).global_position = Vector3(6, 1, 3)
+		await get_tree().create_timer(1.5).timeout
+		print("  лазарет лечит: HP ", hp_before_heal, " → ", player.get_health())
+		# --- Склад ---
+		print("CLAUDE: строю склад боеприпасов")
+		bs2.select_buildable("Склад")
+		await get_tree().create_timer(0.3).timeout
+		var placed_st: bool = bs2.try_place()
+		print("  склад построен: ", placed_st, " (выбрано: ", bs2.current_buildable_name(), ")")
+		if bs2.build_mode:
+			bs2.toggle()
+		# Убираем турели на время замера склада, чтобы они не тратили боезапас
+		# (их работу уже проверили выше) — так виден чистый прирост от склада.
+		for turret in get_tree().get_nodes_in_group("turret"):
+			turret.queue_free()
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			enemy.queue_free()
+		var ammo_before_storage := InventorySystem.get_resource("turret_ammo")
+		await get_tree().create_timer(4.5).timeout  # ждём ~2 тика склада
+		print("  склад пополняет боезапас: ", ammo_before_storage, " → ", InventorySystem.get_resource("turret_ammo"))
+		_dump_state("ПОСЛЕ лазарета и склада")
 
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
