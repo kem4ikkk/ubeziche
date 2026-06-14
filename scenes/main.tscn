@@ -220,3 +220,13 @@ resource_amount = 10
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.5, -5)
 resource_type = "wood"
 resource_amount = 10
+
+[node name="StonePickup1" parent="Resources" instance=ExtResource("5_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.5, -5)
+resource_type = "stone"
+resource_amount = 10
+
+[node name="StonePickup2" parent="Resources" instance=ExtResource("5_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.5, 5)
+resource_type = "stone"
+resource_amount = 10

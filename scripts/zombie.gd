@@ -15,9 +15,12 @@ extends CharacterBody3D
 @export var building_attack_range: float = 2.0  # дистанция атаки построек
 @export var building_attack_damage: float = 8.0  # урон за удар по постройке (Этап 4.4: танк бьёт сильнее)
 
-# Дроп ресурса при смерти (Этап 4.7.1).
-@export var drop_resource_type: String = "stone"
-@export var drop_amount: int = 1
+# Дроп ресурса при смерти (Этап 4.7.1): редкий случайный бонус, основные
+# залежи ресурсов (дерево/камень) разбросаны по карте отдельно.
+@export var drop_chance: float = 0.25     # шанс дропа (0..1)
+@export var drop_resource_types: PackedStringArray = ["wood", "stone"]
+@export var drop_amount_min: int = 1
+@export var drop_amount_max: int = 2
 @export var drop_scene: PackedScene = preload("res://scenes/resource_pickup.tscn")
 
 @onready var health: HealthComponent = $HealthComponent
@@ -132,14 +135,17 @@ func _on_died() -> void:
 	queue_free()
 
 
-## Дроп ресурса (Этап 4.7.1): создаём подбираемый ресурс на месте смерти.
+## Дроп ресурса (Этап 4.7.1): с небольшим шансом создаём подбираемый
+## ресурс случайного типа и количества на месте смерти.
 func _drop_resource() -> void:
-	if drop_scene == null or drop_amount <= 0:
+	if drop_scene == null or drop_resource_types.is_empty():
+		return
+	if randf() > drop_chance:
 		return
 	var pickup := drop_scene.instantiate()
 	get_tree().current_scene.add_child(pickup)
 	pickup.global_position = global_position
 	if "resource_type" in pickup:
-		pickup.resource_type = drop_resource_type
+		pickup.resource_type = drop_resource_types[randi() % drop_resource_types.size()]
 	if "resource_amount" in pickup:
-		pickup.resource_amount = drop_amount
+		pickup.resource_amount = randi_range(drop_amount_min, drop_amount_max)
