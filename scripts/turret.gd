@@ -6,11 +6,16 @@ extends StaticBody3D
 ## это её «расходник» (Turret Component). Когда боезапас кончился — простаивает.
 ## Как и стена, входит в группу "building": зомби могут её разрушить,
 ## игрок — отремонтировать (клавиша F).
+##
+## Электричество (Этап 4.16): пока турель установлена, она постоянно тратит
+## электричество из общего запаса — раз в electricity_drain_interval секунд
+## расходуется 1 ед., независимо от того, стреляет ли турель в этот момент.
+## Если запас опустел — турель простаивает (см. _has_power в generator.gd).
 
 @export var fire_range: float = 12.0      # радиус обнаружения цели, м
 @export var fire_interval: float = 0.8    # пауза между выстрелами, с
 @export var turret_damage: float = 12.0   # урон за выстрел
-@export var electricity_per_shot: int = 1 # расход электричества за выстрел (Этап 4.16)
+@export var electricity_drain_interval: float = 10.0  # секунд на 1 ед. электричества (Этап 4.16)
 
 @onready var health: HealthComponent = $HealthComponent
 @onready var hp_label: Label3D = $HPLabel
@@ -18,6 +23,7 @@ extends StaticBody3D
 @onready var power_label: Label3D = $PowerLabel
 
 var _fire_timer: float = 0.0
+var _drain_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -30,6 +36,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_drain_electricity(delta)
+
 	power_label.visible = not _has_power()
 	if power_label.visible:
 		return
@@ -50,17 +58,23 @@ func _physics_process(delta: float) -> void:
 		_try_fire(target)
 
 
-## Стреляем по цели, если есть боезапас (расходник) и электричество. Иначе простаиваем.
+## Стреляем по цели, если есть боезапас (расходник). Иначе простаиваем.
 func _try_fire(target: Node3D) -> void:
 	if InventorySystem.get_resource("turret_ammo") <= 0:
 		return
-	if InventorySystem.get_resource("electricity") < electricity_per_shot:
-		return
 	InventorySystem.use_resource("turret_ammo", 1)
-	InventorySystem.use_resource("electricity", electricity_per_shot)
 	if target.has_method("take_damage"):
 		target.take_damage(turret_damage)
 	print("Турель стреляет (-", turret_damage, " HP)")
+
+
+## Постоянный расход электричества за то, что турель установлена (Этап 4.16).
+func _drain_electricity(delta: float) -> void:
+	_drain_timer += delta
+	if _drain_timer >= electricity_drain_interval:
+		_drain_timer -= electricity_drain_interval
+		if InventorySystem.get_resource("electricity") > 0:
+			InventorySystem.use_resource("electricity", 1)
 
 
 ## Есть ли питание (Этап 4.14, ресурс переименован в 4.16): нужен живой

@@ -21,10 +21,7 @@ func _ready() -> void:
 func _try_fire(target: Node3D) -> void:
 	if InventorySystem.get_resource("turret_ammo") < ammo_cost:
 		return
-	if InventorySystem.get_resource("electricity") < electricity_per_shot:
-		return
 	InventorySystem.use_resource("turret_ammo", ammo_cost)
-	InventorySystem.use_resource("electricity", electricity_per_shot)
 	var impact := target.global_position
 	var hit_count := 0
 	for enemy in get_tree().get_nodes_in_group("enemy"):
