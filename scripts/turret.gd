@@ -10,6 +10,7 @@ extends StaticBody3D
 @export var fire_range: float = 12.0      # радиус обнаружения цели, м
 @export var fire_interval: float = 0.8    # пауза между выстрелами, с
 @export var turret_damage: float = 12.0   # урон за выстрел
+@export var electricity_per_shot: int = 1 # расход электричества за выстрел (Этап 4.16)
 
 @onready var health: HealthComponent = $HealthComponent
 @onready var hp_label: Label3D = $HPLabel
@@ -49,20 +50,24 @@ func _physics_process(delta: float) -> void:
 		_try_fire(target)
 
 
-## Стреляем по цели, если есть боезапас (расходник). Иначе простаиваем.
+## Стреляем по цели, если есть боезапас (расходник) и электричество. Иначе простаиваем.
 func _try_fire(target: Node3D) -> void:
 	if InventorySystem.get_resource("turret_ammo") <= 0:
 		return
+	if InventorySystem.get_resource("electricity") < electricity_per_shot:
+		return
 	InventorySystem.use_resource("turret_ammo", 1)
+	InventorySystem.use_resource("electricity", electricity_per_shot)
 	if target.has_method("take_damage"):
 		target.take_damage(turret_damage)
 	print("Турель стреляет (-", turret_damage, " HP)")
 
 
-## Есть ли питание (Этап 4.14): нужен живой генератор (группа "generator")
-## и топливо в общем запасе. Без питания турель не наводится и не стреляет.
+## Есть ли питание (Этап 4.14, ресурс переименован в 4.16): нужен живой
+## генератор (группа "generator") и электричество в общем запасе.
+## Без питания турель не наводится и не стреляет.
 func _has_power() -> bool:
-	if InventorySystem.get_resource("fuel") <= 0:
+	if InventorySystem.get_resource("electricity") <= 0:
 		return false
 	return not get_tree().get_nodes_in_group("generator").is_empty()
 

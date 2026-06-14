@@ -8,6 +8,7 @@ extends Node3D
 
 const GRID_SIZE := 1.0
 const PLACE_DISTANCE := 3.0
+const MAX_GENERATORS := 4  # лимит ставимых генераторов (Этап 4.16)
 
 @export var wall_scene: PackedScene
 @export var turret_scene: PackedScene
@@ -29,12 +30,12 @@ var _current: int = 0
 func _ready() -> void:
 	_buildables = [
 		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}, "min_tier": 1},
-		{"name": "Турель", "scene": turret_scene, "cost": {"stone": 3, "wood": 2}, "min_tier": 1},
-		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "stone": 3}, "min_tier": 1},
-		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 4, "stone": 1}, "min_tier": 1},
-		{"name": "Мортира", "scene": mortar_scene, "cost": {"stone": 8, "wood": 4}, "min_tier": 2},
-		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"stone": 12, "wood": 6}, "min_tier": 3},
-		{"name": "Генератор", "scene": generator_scene, "cost": {"stone": 10, "wood": 5}, "min_tier": 1},
+		{"name": "Турель", "scene": turret_scene, "cost": {"steel": 3, "wood": 2}, "min_tier": 1},
+		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "steel": 3}, "min_tier": 1},
+		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 4, "steel": 1}, "min_tier": 1},
+		{"name": "Мортира", "scene": mortar_scene, "cost": {"steel": 8, "wood": 4}, "min_tier": 2},
+		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"steel": 12, "wood": 6}, "min_tier": 3},
+		{"name": "Генератор", "scene": generator_scene, "cost": {"steel": 10, "wood": 5}, "min_tier": 1},
 	]
 	_rebuild_ghost()
 
@@ -88,6 +89,11 @@ func try_place() -> bool:
 	if InventorySystem.shelter_tier < min_tier:
 		print("CLAUDE: '", buildable.name, "' требует Тир ", min_tier,
 				" убежища (сейчас Тир ", InventorySystem.shelter_tier, ")")
+		return false
+
+	if buildable.name == "Генератор" \
+			and get_tree().get_nodes_in_group("generator").size() >= MAX_GENERATORS:
+		print("CLAUDE: достигнут лимит генераторов (", MAX_GENERATORS, ")")
 		return false
 
 	var cost: Dictionary = buildable.cost

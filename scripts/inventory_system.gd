@@ -7,11 +7,17 @@ signal inventory_changed(inventory: Dictionary)
 signal money_changed(amount: int)  ## деньги — вторая валюта (Этап 4.7.2)
 signal tier_changed(new_tier: int)  ## тир убежища (Этап 4.15)
 
+## Лимит для собираемых стройматериалов оригинала (дерево/сталь) — Этап 4.16.
+const RESOURCE_CAP := 40
+const CAPPED_RESOURCES := ["wood", "steel"]
+
 var inventory: Dictionary = {
 	"wood": 0,
-	"stone": 0,
+	"steel": 0,  # переименовано из "stone" — стройматериал, как в оригинале (Этап 4.16)
 	"turret_ammo": 0,  # расходник для турелей (Этап 4.8.1)
-	"fuel": 30,  # топливо генератора — без него турели не питаются (Этап 4.14)
+	# Электричество (Этап 4.16, замена fuel): НЕ собирается на карте, а
+	# производится генераторами (до 4 шт., generator.gd) и тратится турелями.
+	"electricity": 0,
 }
 
 # Деньги (Этап 4.7.2): отдельная валюта, не входит в inventory.
@@ -35,6 +41,8 @@ func add_resource(resource_type: String, amount: int) -> void:
 	if resource_type not in inventory:
 		inventory[resource_type] = 0
 	inventory[resource_type] += amount
+	if resource_type in CAPPED_RESOURCES:
+		inventory[resource_type] = mini(inventory[resource_type], RESOURCE_CAP)
 	inventory_changed.emit(inventory)
 
 

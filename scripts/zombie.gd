@@ -16,9 +16,9 @@ extends CharacterBody3D
 @export var building_attack_damage: float = 8.0  # урон за удар по постройке (Этап 4.4: танк бьёт сильнее)
 
 # Дроп ресурса при смерти (Этап 4.7.1): редкий случайный бонус, основные
-# залежи ресурсов (дерево/камень) разбросаны по карте отдельно.
+# залежи ресурсов (дерево/сталь) разбросаны по карте отдельно.
 @export var drop_chance: float = 0.25     # шанс дропа (0..1)
-@export var drop_resource_types: PackedStringArray = ["wood", "stone"]
+@export var drop_resource_types: PackedStringArray = ["wood", "steel"]
 @export var drop_amount_min: int = 1
 @export var drop_amount_max: int = 2
 @export var drop_scene: PackedScene = preload("res://scenes/resource_pickup.tscn")

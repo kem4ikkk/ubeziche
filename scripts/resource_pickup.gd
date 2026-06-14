@@ -9,8 +9,7 @@ extends Area3D
 # Цвет ресурса по типу — чтобы дерево и камень отличались визуально.
 const COLOR_BY_TYPE := {
 	"wood": Color(0.55, 0.35, 0.15),
-	"stone": Color(0.6, 0.6, 0.6),
-	"fuel": Color(0.95, 0.75, 0.1),
+	"steel": Color(0.6, 0.6, 0.6),
 }
 
 

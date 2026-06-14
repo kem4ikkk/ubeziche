@@ -24,10 +24,10 @@ var _alert_timer: float = 0.0
 # Понятные русские названия ресурсов для HUD.
 const RESOURCE_NAMES := {
 	"wood": "Дерево",
-	"stone": "Камень",
+	"steel": "Сталь",
 	"wall": "Стена",
 	"turret_ammo": "Патроны турелей",
-	"fuel": "Топливо",
+	"electricity": "Электричество",
 }
 
 
