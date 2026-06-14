@@ -5,6 +5,7 @@ extends Node
 
 signal inventory_changed(inventory: Dictionary)
 signal money_changed(amount: int)  ## деньги — вторая валюта (Этап 4.7.2)
+signal tier_changed(new_tier: int)  ## тир убежища (Этап 4.15)
 
 var inventory: Dictionary = {
 	"wood": 0,
@@ -17,6 +18,12 @@ var inventory: Dictionary = {
 # Ресурсы (дерево/камень) идут на крафт и постройку, деньги — на покупки
 # в мастерской (стены, лечение). Деньги капают за убийство зомби.
 var money: int = 0
+
+# Тир убежища (Этап 4.15): прокачка через мастерскую открывает доступ
+# к более продвинутым постройкам (Мортира — Тир 2, Гатлинг — Тир 3)
+# и снижает расход топлива генератора на Тир 4.
+const MAX_TIER := 4
+var shelter_tier: int = 1
 
 
 func _ready() -> void:
@@ -63,3 +70,9 @@ func spend_money(amount: int) -> bool:
 ## Получить текущее количество денег.
 func get_money() -> int:
 	return money
+
+
+## Поднять тир убежища на 1 (вызывается мастерской после оплаты апгрейда).
+func set_tier(new_tier: int) -> void:
+	shelter_tier = new_tier
+	tier_changed.emit(shelter_tier)

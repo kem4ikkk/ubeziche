@@ -359,6 +359,60 @@ func _run_capture(args: PackedStringArray) -> void:
 			player.heal(1000.0)  # лечим, чтобы игрок не погиб до снимка
 		_dump_state("ПОСЛЕ джаггернаута")
 
+	# 6.94) Тиры убежища (Этап 4.15): апгрейд через мастерскую открывает
+	# доступ к более продвинутым турелям (Мортира — Тир 2, Гатлинг — Тир 3)
+	# и улучшает генератор (Тир 4 — вдвое медленнее тратит топливо).
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
+		print("CLAUDE: проверяю систему тиров (4.15)")
+		var bs_t := player.get_node("BuildSystem")
+		var workshop_t := get_tree().get_first_node_in_group("workshop")
+		print("  стартовый тир: ", InventorySystem.shelter_tier)
+
+		for b in get_tree().get_nodes_in_group("building"):
+			b.queue_free()
+		InventorySystem.add_resource("wood", 200)
+		InventorySystem.add_resource("stone", 200)
+		InventorySystem.add_money(1000)
+		(player as Node3D).global_position = Vector3(0, 1, 5)
+		if not bs_t.build_mode:
+			bs_t.toggle()
+
+		bs_t.select_buildable("Мортира")
+		await get_tree().create_timer(0.3).timeout
+		var placed_t1: bool = bs_t.try_place()
+		print("  мортира на Тир 1: ", placed_t1, " (ожидается false)")
+
+		var up2: bool = workshop_t.upgrade_shelter_tier()
+		print("  апгрейд до Тир 2: ", up2, ", текущий тир: ", InventorySystem.shelter_tier)
+
+		var placed_t2: bool = bs_t.try_place()
+		print("  мортира на Тир 2: ", placed_t2, " (ожидается true)")
+		for m in get_tree().get_nodes_in_group("building"):
+			m.queue_free()
+
+		bs_t.select_buildable("Гатлинг")
+		await get_tree().create_timer(0.3).timeout
+		var placed_g2: bool = bs_t.try_place()
+		print("  гатлинг на Тир 2: ", placed_g2, " (ожидается false)")
+
+		var up3: bool = workshop_t.upgrade_shelter_tier()
+		print("  апгрейд до Тир 3: ", up3, ", текущий тир: ", InventorySystem.shelter_tier)
+		var placed_g3: bool = bs_t.try_place()
+		print("  гатлинг на Тир 3: ", placed_g3, " (ожидается true)")
+		for b in get_tree().get_nodes_in_group("building"):
+			b.queue_free()
+
+		var up4: bool = workshop_t.upgrade_shelter_tier()
+		print("  апгрейд до Тир 4: ", up4, ", текущий тир: ", InventorySystem.shelter_tier)
+		var up5: bool = workshop_t.upgrade_shelter_tier()
+		print("  апгрейд за пределами максимума: ", up5, " (ожидается false), тир: ", InventorySystem.shelter_tier)
+		if is_instance_valid(hud):
+			print("  HUD: '", hud.tier_label.text, "', алерт: '", hud.alert_label.text, "'")
+
+		if bs_t.build_mode:
+			bs_t.toggle()
+		_dump_state("ПОСЛЕ тиров")
+
 	# 6.95) Мортирная турель (Этап 4.8.3): строим мортиру, спавним кучку
 	# зомби рядом друг с другом — выстрел мортиры должен задеть всех
 	# сплеш-уроном (по площади), а не только ближайшую цель.

@@ -73,6 +73,19 @@ horizontal_alignment = 2
 text = "День: 20"
 theme_override_font_sizes/font_size = 20
 
+[node name="TierLabel" type="Label" parent="."]
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -160.0
+offset_top = 45.0
+offset_right = -10.0
+offset_bottom = 75.0
+horizontal_alignment = 2
+text = "Тир убежища: 1"
+theme_override_font_sizes/font_size = 20
+
 [node name="AlertLabel" type="Label" parent="."]
 visible = false
 anchor_left = 0.5

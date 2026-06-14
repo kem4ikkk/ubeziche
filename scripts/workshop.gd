@@ -21,6 +21,15 @@ extends Area3D
 @export var fuel_cost: int = 15         # цена пачки топлива для генератора
 @export var fuel_amount: int = 10       # сколько топлива даёт покупка
 
+## Стоимость апгрейда убежища до указанного тира (Этап 4.15).
+## Тир 2 открывает Мортиру, Тир 3 — Гатлинг, Тир 4 — генератор тратит
+## топливо вдвое медленнее (generator.gd).
+const TIER_UPGRADE_COST := {
+	2: {"wood": 30, "stone": 20, "money": 80},
+	3: {"wood": 50, "stone": 40, "money": 150},
+	4: {"wood": 80, "stone": 60, "money": 250},
+}
+
 var _player_inside: bool = false
 var _capture_mode: bool = false
 
@@ -66,6 +75,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_turret_ammo()
 			KEY_L:
 				buy_fuel()
+			KEY_T:
+				upgrade_shelter_tier()
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.
@@ -125,6 +136,29 @@ func buy_fuel() -> bool:
 	return false
 
 
+## Апгрейд тира убежища (Этап 4.15): открывает доступ к более продвинутым
+## турелям (Мортира — Тир 2, Гатлинг — Тир 3) и улучшает генератор (Тир 4).
+func upgrade_shelter_tier() -> bool:
+	var current: int = InventorySystem.shelter_tier
+	if current >= InventorySystem.MAX_TIER:
+		print("Мастерская: убежище уже максимального тира (", current, ")")
+		return false
+	var next_tier: int = current + 1
+	var cost: Dictionary = TIER_UPGRADE_COST[next_tier]
+	if InventorySystem.get_resource("wood") < cost.wood \
+			or InventorySystem.get_resource("stone") < cost.stone \
+			or InventorySystem.get_money() < cost.money:
+		print("Мастерская: не хватает ресурсов для апгрейда до Тир ", next_tier,
+				" (нужно ", cost.wood, " дерева, ", cost.stone, " камня, ", cost.money, "$)")
+		return false
+	InventorySystem.use_resource("wood", cost.wood)
+	InventorySystem.use_resource("stone", cost.stone)
+	InventorySystem.spend_money(cost.money)
+	InventorySystem.set_tier(next_tier)
+	print("Мастерская: убежище улучшено до Тир ", next_tier, "!")
+	return true
+
+
 ## Покупка следующего оружия из арсенала — цену и владение считает игрок.
 func buy_weapon() -> bool:
 	var player := get_tree().get_first_node_in_group("player")
@@ -142,12 +176,22 @@ func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)\n[L] топливо x%d (%d$)" % [
-				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost, fuel_amount, fuel_cost]
+		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)\n[L] топливо x%d (%d$)\n[T] %s" % [
+				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost, fuel_amount, fuel_cost, _tier_offer_text()]
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"
 		prompt.modulate = Color(0.7, 0.7, 0.7)
+
+
+## Текст апгрейда тира убежища для подсказки: следующий тир + цена.
+func _tier_offer_text() -> String:
+	var current: int = InventorySystem.shelter_tier
+	if current >= InventorySystem.MAX_TIER:
+		return "Убежище: Тир %d (максимум)" % current
+	var cost: Dictionary = TIER_UPGRADE_COST[current + 1]
+	return "Тир %d → Тир %d (%d дерева, %d камня, %d$)" % [
+			current, current + 1, cost.wood, cost.stone, cost.money]
 
 
 ## Текст предложения оружия для подсказки: следующий ствол + цена.

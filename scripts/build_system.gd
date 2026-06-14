@@ -28,13 +28,13 @@ var _current: int = 0
 
 func _ready() -> void:
 	_buildables = [
-		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}},
-		{"name": "Турель", "scene": turret_scene, "cost": {"stone": 3, "wood": 2}},
-		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "stone": 3}},
-		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 4, "stone": 1}},
-		{"name": "Мортира", "scene": mortar_scene, "cost": {"stone": 8, "wood": 4}},
-		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"stone": 12, "wood": 6}},
-		{"name": "Генератор", "scene": generator_scene, "cost": {"stone": 10, "wood": 5}},
+		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}, "min_tier": 1},
+		{"name": "Турель", "scene": turret_scene, "cost": {"stone": 3, "wood": 2}, "min_tier": 1},
+		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "stone": 3}, "min_tier": 1},
+		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 4, "stone": 1}, "min_tier": 1},
+		{"name": "Мортира", "scene": mortar_scene, "cost": {"stone": 8, "wood": 4}, "min_tier": 2},
+		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"stone": 12, "wood": 6}, "min_tier": 3},
+		{"name": "Генератор", "scene": generator_scene, "cost": {"stone": 10, "wood": 5}, "min_tier": 1},
 	]
 	_rebuild_ghost()
 
@@ -84,6 +84,12 @@ func try_place() -> bool:
 		return false
 
 	var buildable: Dictionary = _buildables[_current]
+	var min_tier: int = buildable.get("min_tier", 1)
+	if InventorySystem.shelter_tier < min_tier:
+		print("CLAUDE: '", buildable.name, "' требует Тир ", min_tier,
+				" убежища (сейчас Тир ", InventorySystem.shelter_tier, ")")
+		return false
+
 	var cost: Dictionary = buildable.cost
 	for resource_type in cost:
 		if InventorySystem.get_resource(resource_type) < cost[resource_type]:

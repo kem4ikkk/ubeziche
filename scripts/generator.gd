@@ -34,6 +34,8 @@ func _process(delta: float) -> void:
 
 	_consume_timer += delta
 	var interval := 1.0 / fuel_consumption_rate
+	if InventorySystem.shelter_tier >= 4:
+		interval *= 2.0  # Тир 4 (4.15): улучшенный генератор тратит топливо вдвое медленнее
 	if _consume_timer >= interval:
 		_consume_timer -= interval
 		if InventorySystem.get_resource("fuel") > 0:

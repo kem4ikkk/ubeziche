@@ -7,6 +7,7 @@ extends CanvasLayer
 @onready var health_label: Label = $HealthLabel
 @onready var ammo_label: Label = $AmmoLabel
 @onready var phase_label: Label = $PhaseLabel
+@onready var tier_label: Label = $TierLabel
 @onready var result_screen: ColorRect = $ResultScreen
 @onready var result_label: Label = $ResultScreen/ResultLabel
 @onready var alert_label: Label = $AlertLabel
@@ -56,6 +57,9 @@ func _ready() -> void:
 	EventBus.evacuation_started.connect(_on_evacuation_started)
 	EventBus.power_lost.connect(_on_power_lost)
 	EventBus.power_restored.connect(_on_power_restored)
+
+	InventorySystem.tier_changed.connect(_on_tier_changed)
+	tier_label.text = "Тир убежища: %d" % InventorySystem.shelter_tier
 
 
 func _process(delta: float) -> void:
@@ -163,6 +167,12 @@ func _on_power_lost() -> void:
 
 func _on_power_restored() -> void:
 	_show_alert("⚡ Питание восстановлено — турели снова работают", Color(0.4, 1.0, 0.4))
+
+
+## Тиры убежища (Этап 4.15).
+func _on_tier_changed(new_tier: int) -> void:
+	tier_label.text = "Тир убежища: %d" % new_tier
+	_show_alert("🔧 Убежище улучшено до Тир %d!" % new_tier, Color(0.4, 1.0, 0.4))
 
 
 func _show_alert(text: String, color: Color) -> void:
