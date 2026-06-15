@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_zombie"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/game_state_manager.gd" id="7_gamestate"]
 [ext_resource type="PackedScene" path="res://scenes/workshop.tscn" id="8_workshop"]
 [ext_resource type="PackedScene" path="res://scenes/generator.tscn" id="10_generator"]
+[ext_resource type="PackedScene" path="res://scenes/skill_menu.tscn" id="11_skillmenu"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -173,6 +174,8 @@ surface_material_override/0 = SubResource("StandardMaterial3D_opening")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
 [node name="HUD" parent="." instance=ExtResource("3_hud")]
+
+[node name="SkillMenu" parent="." instance=ExtResource("11_skillmenu")]
 
 [node name="WaveManager" type="Node3D" parent="."]
 script = ExtResource("4_wave")

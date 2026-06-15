@@ -70,6 +70,10 @@ func _apply_phase(night: bool, instant: bool) -> void:
 			_wave_manager.start_wave()
 	else:
 		print("Наступил день")
+		# Переход ночь→день (не стартовая установка) = пережита ночь (Этап 4.23):
+		# начисляем очко навыка через шину событий.
+		if not instant:
+			EventBus.night_survived.emit()
 
 
 func _update_lighting() -> void:

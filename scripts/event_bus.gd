@@ -20,3 +20,7 @@ signal evacuation_started()
 ## турели простаивают; восстановление питания — обратное оповещение.
 signal power_lost()
 signal power_restored()
+
+## Пережита ночь (Этап 4.23): цикл день/ночь шлёт это при переходе ночь→день.
+## InventorySystem ловит и начисляет очко навыка (3 на старте, +1 за ночь).
+signal night_survived()

@@ -133,6 +133,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
 		equip_axe()
 
+	# N — открыть/закрыть меню навыков (Этап 4.23).
+	if event is InputEventKey and event.pressed and event.keycode == KEY_N:
+		var menu := get_tree().get_first_node_in_group("skill_menu")
+		if is_instance_valid(menu) and menu.has_method("toggle"):
+			menu.toggle()
+
 	# Esc — отпустить курсор.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -331,8 +337,10 @@ func swing_axe() -> void:
 				print("CLAUDE: узел истощён — реген на следующий день")
 			return
 		if target.is_in_group("enemy") and target.has_method("take_damage"):
-			target.take_damage(axe_damage)
-			print("Удар топором по зомби: -", axe_damage, " HP")
+			# Ветка «Бой» (Этап 4.23) добавляет урон топору в ближнем бою.
+			var dmg := axe_damage + InventorySystem.combat_level * 10.0
+			target.take_damage(dmg)
+			print("Удар топором по зомби: -", dmg, " HP")
 			return
 		if target.is_in_group("building") and target.has_method("repair"):
 			_repair_building(target)
@@ -380,7 +388,10 @@ func _repair_building(node: Node) -> void:
 	if node.has_method("is_full_health") and node.is_full_health():
 		print("CLAUDE: постройка уже на максимум HP")
 		return
-	var amount := repair_amount * 2.0 if InventorySystem.has_hammer else repair_amount
+	# Ветка «Инженер» (Этап 4.23) добавляет HP к ремонту, молот удваивает итог.
+	var amount := repair_amount + InventorySystem.engineer_level * 5.0
+	if InventorySystem.has_hammer:
+		amount *= 2.0
 	node.repair(amount)
 	print("Постройка отремонтирована (+", amount, " HP)")
 

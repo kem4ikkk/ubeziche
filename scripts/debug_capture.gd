@@ -746,6 +746,40 @@ func _run_capture(args: PackedStringArray) -> void:
 			print("  swing_axe по узлу (навык 2): +", InventorySystem.get_resource(rnode.resource_type) - rb)
 		_dump_state("ПОСЛЕ добычи (4.22)")
 
+	# 6.992) Навыки (Этап 4.23): очки (3 на старте, +1 за пережитую ночь),
+	# ветки Добыча/Бой/Инженер; меню по клавише N.
+	if true:
+		print("CLAUDE: проверяю навыки (4.23)")
+		get_tree().paused = false
+		# Сброс к стартовому состоянию для чистоты замера.
+		InventorySystem.skill_points = 3
+		InventorySystem.gather_level = 1
+		InventorySystem.combat_level = 0
+		InventorySystem.engineer_level = 0
+		print("  старт: очки=", InventorySystem.skill_points, " Добыча=", InventorySystem.gather_level)
+		InventorySystem.upgrade_skill("gather")
+		InventorySystem.upgrade_skill("combat")
+		print("  после вложений: очки=", InventorySystem.skill_points,
+				" Добыча=", InventorySystem.gather_level, " Бой=", InventorySystem.combat_level)
+		# Третье вложение тратит последнее очко, четвёртое не должно пройти.
+		InventorySystem.upgrade_skill("engineer")
+		var up_fail: bool = InventorySystem.upgrade_skill("engineer")
+		print("  очки=", InventorySystem.skill_points, " Инженер=", InventorySystem.engineer_level,
+				" лишнее вложение прошло: ", up_fail)
+		# Очко за пережитую ночь.
+		EventBus.night_survived.emit()
+		print("  после пережитой ночи: очки=", InventorySystem.skill_points)
+		# Меню навыков (N) — переключение видимости.
+		var sm := get_tree().get_first_node_in_group("skill_menu")
+		if is_instance_valid(sm) and sm.has_method("toggle"):
+			sm.toggle()
+			print("  меню навыков открыто: ", sm.visible)
+			sm.toggle()
+			print("  меню навыков закрыто: ", sm.visible)
+			# Оставляем открытым для финального скриншота (визуальная проверка UI).
+			sm.toggle()
+		_dump_state("ПОСЛЕ навыков (4.23)")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")
