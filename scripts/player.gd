@@ -55,6 +55,11 @@ var _reloading: bool = false
 @export var axe_range: float = 3.0        # дальность удара/луча топора, м
 var axe_equipped: bool = true             # на старте в руках топор, а не ствол
 
+# Скорость атаки топора (Этап 4.27): кулдаун между ударами. Базовый топор
+# медленный; классовые инструменты ускоряют (улучшенный топор — быстрее всех).
+@export var axe_swing_interval: float = 0.6
+var _swing_timer: float = 0.0
+
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
 @onready var health: HealthComponent = $HealthComponent
@@ -147,6 +152,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Кулдаун удара топором (Этап 4.27).
+	if _swing_timer > 0.0:
+		_swing_timer -= delta
+
 	# Притяжение к земле, пока не на полу.
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -328,19 +337,26 @@ func _apply_weapon(index: int) -> void:
 ## Приоритет: узел ресурса (добыча, 4.22) → зомби (ближний бой) → постройка
 ## (ремонт). Стены низкие (1 м), камера на 1.6 м — если луч прошёл мимо,
 ## чиним ближайшую постройку в радиусе repair_range.
+## Кулдаун между ударами зависит от инструмента (Этап 4.27, _axe_swing_interval).
 func swing_axe() -> void:
+	if _swing_timer > 0.0:
+		return  # ещё не отошли от прошлого удара (скорость атаки)
+	_swing_timer = _axe_swing_interval()
+
 	var target := _axe_raycast_target()
 	if target != null:
 		if target.is_in_group("resource_node") and target.has_method("hit"):
-			var got: int = target.hit()          # добыча (этап 4.22)
+			var got: int = target.hit()          # добыча (этап 4.22, только от навыка)
 			if got > 0:
 				print("Добыто ресурса: +", got)
 			else:
 				print("CLAUDE: узел истощён — реген на следующий день")
 			return
 		if target.is_in_group("enemy") and target.has_method("take_damage"):
-			# Ветка «Бой» (Этап 4.23) добавляет урон топору в ближнем бою.
+			# Урон = база + ветка «Бой» (4.23) + Нож (4.27).
 			var dmg := axe_damage + InventorySystem.combat_level * 10.0
+			if InventorySystem.has_knife:
+				dmg += 10.0
 			target.take_damage(dmg)
 			print("Удар топором по зомби: -", dmg, " HP")
 			return
@@ -353,6 +369,16 @@ func swing_axe() -> void:
 		_repair_building(nearest)
 	else:
 		print("CLAUDE: топор бьёт по воздуху")
+
+
+## Интервал между ударами топора (Этап 4.27). Инструменты ускоряют атаку:
+## улучшенный топор — быстрее всех; нож/молот — быстрее обычного топора.
+func _axe_swing_interval() -> float:
+	if InventorySystem.has_improved_axe:
+		return axe_swing_interval * 0.5    # самый быстрый
+	if InventorySystem.has_knife or InventorySystem.has_hammer:
+		return axe_swing_interval * 0.75
+	return axe_swing_interval
 
 
 ## Луч из камеры вперёд (учитывает Area3D — узлы ресурсов это Area3D).

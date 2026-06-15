@@ -585,26 +585,40 @@ func _run_capture(args: PackedStringArray) -> void:
 				", запитаны по порядку: ", powered_states, " (ожидается [true, false] при 1 генераторе)")
 		_dump_state("ПОСЛЕ системы питания")
 
-	# 6.98) Молот (Этап 4.17): крафтится один раз в мастерской и удваивает
-	# восстановление HP за ремонт (F). Проверяем крафт и эффект на стене.
+	# 6.98) Классовые инструменты + UI-меню мастерской (Этап 4.27): крафт по
+	# уровню ветки навыка; баффы (нож +урон/скорость, улучш.топор — самая высокая
+	# скорость атаки, молот — ремонт x2 + скорость). Меню открывается по E.
 	var workshop_h := get_tree().get_first_node_in_group("workshop")
 	if is_instance_valid(player) and player is Node3D and is_instance_valid(workshop_h):
-		print("CLAUDE: проверяю молот (4.17)")
-		# Игрок мог погибнуть в предыдущих тестах — лечим и снимаем паузу,
-		# иначе ремонт/постройка не сработают.
+		print("CLAUDE: проверяю инструменты мастерской (4.27)")
 		if player.has_method("heal"):
 			player.heal(1000.0)
 		get_tree().paused = false
 		InventorySystem.has_hammer = false
-		InventorySystem.add_resource("wood", 20)
-		InventorySystem.add_resource("steel", 20)
-		InventorySystem.add_money(100)
+		InventorySystem.has_knife = false
+		InventorySystem.has_improved_axe = false
+		InventorySystem.add_resource("wood", 40)
+		InventorySystem.add_resource("steel", 40)
 		(player as Node3D).global_position = Vector3(-3, 1, 3)
 		await get_tree().create_timer(0.2).timeout
-		var crafted_hammer: bool = workshop_h.craft_hammer()
-		print("  молот скрафчен: ", crafted_hammer, ", has_hammer: ", InventorySystem.has_hammer)
 
-		# Строим стену рядом, ломаем её и проверяем ремонт x2.
+		# Гейт: без навыка «Бой» нож не крафтится.
+		InventorySystem.combat_level = 0
+		var knife_locked: bool = not workshop_h.craft_knife()
+		print("  нож без навыка «Бой»: заблокирован=", knife_locked, " (ожидается true)")
+		# Поднимаем навыки и крафтим все три инструмента.
+		InventorySystem.combat_level = 1
+		InventorySystem.gather_level = 2
+		InventorySystem.engineer_level = 1
+		var k: bool = workshop_h.craft_knife()
+		var ia: bool = workshop_h.craft_improved_axe()
+		var hm: bool = workshop_h.craft_hammer()
+		print("  крафт нож/улучш.топор/молот: ", k, "/", ia, "/", hm, " | флаги: ",
+				InventorySystem.has_knife, "/", InventorySystem.has_improved_axe, "/", InventorySystem.has_hammer)
+		print("  интервал удара: базовый ", player.axe_swing_interval,
+				" → текущий ", player._axe_swing_interval(), " (улучш.топор = x0.5)")
+
+		# Эффект молота: ремонт x2 HP на стене.
 		if player.has_node("BuildSystem"):
 			var bs_h := player.get_node("BuildSystem")
 			for b in get_tree().get_nodes_in_group("building"):
@@ -623,13 +637,19 @@ func _run_capture(args: PackedStringArray) -> void:
 				wall_h.take_damage(40.0)
 				await get_tree().create_timer(0.2).timeout
 				var hp_before_h: float = wall_h.health.current_health
-				InventorySystem.add_resource("wood", 1)
-				player.repair_target()
+				player._repair_building(wall_h)
 				await get_tree().create_timer(0.1).timeout
-				var hp_after_h: float = wall_h.health.current_health
-				print("  ремонт с молотом: HP ", hp_before_h, " → ", hp_after_h,
-						" (ожидается +", player.repair_amount * 2.0, ")")
-		_dump_state("ПОСЛЕ молота")
+				print("  ремонт с молотом: HP ", hp_before_h, " → ", wall_h.health.current_health,
+						" (молот x2: +", (player.repair_amount + InventorySystem.engineer_level * 5.0) * 2.0, ")")
+
+		# UI-меню мастерской (E) — переключение видимости.
+		var wsmenu := get_tree().get_first_node_in_group("workshop_menu")
+		if is_instance_valid(wsmenu) and wsmenu.has_method("toggle"):
+			wsmenu.toggle()
+			print("  меню мастерской открыто: ", wsmenu.visible)
+			wsmenu.toggle()
+			print("  меню мастерской закрыто: ", not wsmenu.visible)
+		_dump_state("ПОСЛЕ инструментов (4.27)")
 
 	# 6.99) Топор как стартовый инструмент (Этап 4.21): ЛКМ с топором —
 	# добыча/ремонт/ближний бой. Проверяем экипировку, бесплатный ремонт и

@@ -1,13 +1,9 @@
 extends Area3D
 
-## Мастерская / точка крафта (Этап 4.7.3; экономика пересмотрена в 4.25).
-## Игрок внутри Area3D взаимодействует клавишами:
-##   C — скрафтить стену из ресурсов (2 дерева → 1 стена)
-##   T — апгрейд тира убежища за ресурсы (дерево + сталь)
-##   M — скрафтить Молот за ресурсы (один раз; ремонт x2 HP)
-## Деньги тратятся ТОЛЬКО на чёрном рынке (оружие, Этап 4.24). Постройки/крафт/
-## апгрейды — за ресурсы. Боезапаса турелей больше нет (Этап 4.25).
-## В Этапе 4.26 это меню переедет в полноценный UI по клавише E.
+## Мастерская / точка крафта (Этап 4.7.3; экономика — 4.25, UI-меню — 4.27).
+## Игрок внутри Area3D + клавиша E открывает UI-меню (workshop_menu.gd), где за
+## ресурсы: стена, апгрейд тира, классовые инструменты (нож/улучшенный топор/
+## молот — гейт по ветке навыка). Деньги тратятся ТОЛЬКО на чёрном рынке (4.24).
 
 ## Стоимость апгрейда убежища до тира (Этап 4.15; деньги убраны в 4.25).
 ## Тир 2 открывает Мортиру, Тир 3 — Гатлинг, Тир 4 — генераторы мощнее.
@@ -18,8 +14,11 @@ const TIER_UPGRADE_COST := {
 	4: {"wood": 40, "steel": 35},
 }
 
-## Стоимость крафта Молота (Этап 4.17; деньги убраны в 4.25).
+## Стоимость крафта классовых инструментов (Этап 4.27). Гейт по уровню ветки
+## навыка: Молот — Инженер, Нож — Бой, Улучшенный топор — Добыча.
 const HAMMER_COST := {"wood": 15, "steel": 10}
+const KNIFE_COST := {"wood": 10, "steel": 10}
+const IMPROVED_AXE_COST := {"wood": 15, "steel": 5}
 
 var _player_inside: bool = false
 var _capture_mode: bool = false
@@ -52,14 +51,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	# вне зоны мастерской клавиши тоже не действуют.
 	if _capture_mode or not _player_inside:
 		return
-	if event is InputEventKey and event.pressed:
-		match event.keycode:
-			KEY_C:
-				craft_wall()
-			KEY_T:
-				upgrade_shelter_tier()
-			KEY_M:
-				craft_hammer()
+	# E — открыть/закрыть UI-меню мастерской (Этап 4.27).
+	if event is InputEventKey and event.pressed and event.keycode == KEY_E:
+		var menu := get_tree().get_first_node_in_group("workshop_menu")
+		if is_instance_valid(menu) and menu.has_method("toggle"):
+			menu.toggle()
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.
@@ -91,23 +87,70 @@ func upgrade_shelter_tier() -> bool:
 	return true
 
 
-## Крафт Молота (Этап 4.17; за ресурсы — деньги убраны в 4.25): постоянный
-## инструмент, делается один раз. С Молотом ремонт топором восстанавливает x2 HP.
+## Ключи классовых инструментов для меню (Этап 4.27).
+const TOOL_KEYS := ["knife", "improved_axe", "hammer"]
+
+
+## Крафт Молота (Инженер): ремонт x2 HP + скорость атаки как у ножа.
 func craft_hammer() -> bool:
-	if InventorySystem.has_hammer:
-		print("Мастерская: молот уже скрафчен")
+	return _craft_tool("hammer")
+
+
+## Крафт Ножа (Бой): +урон топора, выше скорость атаки.
+func craft_knife() -> bool:
+	return _craft_tool("knife")
+
+
+## Крафт Улучшенного топора (Добыча): самая высокая скорость атаки.
+func craft_improved_axe() -> bool:
+	return _craft_tool("improved_axe")
+
+
+## Крафт инструмента по ключу — для меню мастерской (Этап 4.27).
+func craft_tool(tool: String) -> bool:
+	return _craft_tool(tool)
+
+
+## Публичное описание инструмента (для UI-меню).
+func get_tool_spec(tool: String) -> Dictionary:
+	return _tool_spec(tool)
+
+
+## Общий крафт классового инструмента: проверка «уже есть», уровня ветки навыка
+## и ресурсов; затем списание и выставление флага в InventorySystem (Этап 4.27).
+func _craft_tool(tool: String) -> bool:
+	var spec := _tool_spec(tool)
+	if InventorySystem.get(spec.flag):
+		print("Мастерская: «", spec.title, "» уже скрафчен")
 		return false
-	if InventorySystem.get_resource("wood") < HAMMER_COST.wood \
-			or InventorySystem.get_resource("steel") < HAMMER_COST.steel:
-		print("Мастерская: не хватает ресурсов для молота (нужно ",
-				HAMMER_COST.wood, " дерева, ", HAMMER_COST.steel, " стали)")
+	if InventorySystem.get_skill_level(spec.branch) < spec.req_level:
+		print("Мастерская: «", spec.title, "» требует навык «", spec.branch, "» уровня ", spec.req_level)
 		return false
-	InventorySystem.use_resource("wood", HAMMER_COST.wood)
-	InventorySystem.use_resource("steel", HAMMER_COST.steel)
-	InventorySystem.has_hammer = true
-	_update_prompt()
-	print("Мастерская: скрафтили молот — ремонт теперь восстанавливает вдвое больше HP")
+	var cost: Dictionary = spec.cost
+	if InventorySystem.get_resource("wood") < cost.wood \
+			or InventorySystem.get_resource("steel") < cost.steel:
+		print("Мастерская: не хватает ресурсов для «", spec.title, "» (нужно ",
+				cost.wood, " дерева, ", cost.steel, " стали)")
+		return false
+	InventorySystem.use_resource("wood", cost.wood)
+	InventorySystem.use_resource("steel", cost.steel)
+	InventorySystem.set(spec.flag, true)
+	print("Мастерская: скрафтили «", spec.title, "»")
 	return true
+
+
+## Описание классового инструмента: флаг, ветка навыка, требуемый уровень, цена.
+func _tool_spec(tool: String) -> Dictionary:
+	match tool:
+		"knife":
+			return {"flag": "has_knife", "branch": "combat", "req_level": 1,
+					"cost": KNIFE_COST, "title": "Нож"}
+		"improved_axe":
+			return {"flag": "has_improved_axe", "branch": "gather", "req_level": 2,
+					"cost": IMPROVED_AXE_COST, "title": "Улучшенный топор"}
+		_:
+			return {"flag": "has_hammer", "branch": "engineer", "req_level": 1,
+					"cost": HAMMER_COST, "title": "Молот"}
 
 
 ## Подсказка над верстаком: ярче, когда игрок рядом.
@@ -115,26 +158,8 @@ func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[T] %s\n[M] %s" % [
-				_tier_offer_text(), _hammer_offer_text()]
+		prompt.text = "МАСТЕРСКАЯ\n[E] открыть меню крафта"
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"
 		prompt.modulate = Color(0.7, 0.7, 0.7)
-
-
-## Текст апгрейда тира для подсказки: следующий тир + цена (ресурсы).
-func _tier_offer_text() -> String:
-	var current: int = InventorySystem.shelter_tier
-	if current >= InventorySystem.MAX_TIER:
-		return "Убежище: Тир %d (максимум)" % current
-	var cost: Dictionary = TIER_UPGRADE_COST[current + 1]
-	return "Тир %d → Тир %d (%d дерева, %d стали)" % [
-			current, current + 1, cost.wood, cost.steel]
-
-
-## Текст предложения молота для подсказки (Этап 4.17).
-func _hammer_offer_text() -> String:
-	if InventorySystem.has_hammer:
-		return "молот скрафчен (ремонт x2 HP)"
-	return "молот (%d дерева, %d стали)" % [HAMMER_COST.wood, HAMMER_COST.steel]

@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_zombie"]
@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" path="res://scenes/skill_menu.tscn" id="11_skillmenu"]
 [ext_resource type="PackedScene" path="res://scenes/black_market.tscn" id="12_market"]
 [ext_resource type="PackedScene" path="res://scenes/build_menu.tscn" id="13_buildmenu"]
+[ext_resource type="PackedScene" path="res://scenes/workshop_menu.tscn" id="14_wsmenu"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -180,6 +181,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 [node name="SkillMenu" parent="." instance=ExtResource("11_skillmenu")]
 
 [node name="BuildMenu" parent="." instance=ExtResource("13_buildmenu")]
+
+[node name="WorkshopMenu" parent="." instance=ExtResource("14_wsmenu")]
 
 [node name="WaveManager" type="Node3D" parent="."]
 script = ExtResource("4_wave")
