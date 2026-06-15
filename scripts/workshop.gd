@@ -5,8 +5,9 @@ extends Area3D
 ##   C — скрафтить стену из ресурсов (2 дерева → 1 стена)   [ресурсная экономика]
 ##   G — купить стену за деньги                              [денежная экономика]
 ##   H — купить лечение за деньги (+HP)                      [денежная экономика]
-##   J — купить следующее оружие из арсенала                 [денежная экономика]
 ##   K — купить боезапас турелей (расходник)                 [денежная экономика]
+## Оружие теперь покупается НЕ здесь, а на чёрном рынке за деньги (Этап 4.24,
+## scripts/black_market.gd).
 ##
 ## Так замыкаются обе ветки экономики (Этап 4.7.2): дерево/сталь тратятся
 ## на крафт, а деньги (капают за убийство зомби) — на покупки в мастерской.
@@ -70,8 +71,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				buy_wall()
 			KEY_H:
 				buy_heal()
-			KEY_J:
-				buy_weapon()
 			KEY_K:
 				buy_turret_ammo()
 			KEY_T:
@@ -171,25 +170,13 @@ func craft_hammer() -> bool:
 	return true
 
 
-## Покупка следующего оружия из арсенала — цену и владение считает игрок.
-func buy_weapon() -> bool:
-	var player := get_tree().get_first_node_in_group("player")
-	if not is_instance_valid(player) or not player.has_method("buy_weapon"):
-		return false
-	var index: int = player.next_unowned_weapon_index()
-	if index < 0:
-		print("Мастерская: всё оружие уже куплено")
-		return false
-	return player.buy_weapon(index)
-
-
 ## Подсказка над верстаком: ярче, когда игрок рядом.
 func _update_prompt() -> void:
 	if prompt == null:
 		return
 	if _player_inside:
-		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[J] %s\n[K] боезапас турелей x%d (%d$)\n[T] %s\n[M] %s" % [
-				buy_wall_cost, heal_cost, _weapon_offer_text(), turret_ammo_amount, turret_ammo_cost, _tier_offer_text(), _hammer_offer_text()]
+		prompt.text = "МАСТЕРСКАЯ\n[C] стена (2 дерева)\n[G] стена (%d$)\n[H] лечение (%d$)\n[K] боезапас турелей x%d (%d$)\n[T] %s\n[M] %s" % [
+				buy_wall_cost, heal_cost, turret_ammo_amount, turret_ammo_cost, _tier_offer_text(), _hammer_offer_text()]
 		prompt.modulate = Color(1, 1, 1)
 	else:
 		prompt.text = "Мастерская\n(подойдите ближе)"
@@ -211,15 +198,3 @@ func _hammer_offer_text() -> String:
 	if InventorySystem.has_hammer:
 		return "молот скрафчен (ремонт x2 HP)"
 	return "молот (%d дерева, %d стали, %d$)" % [HAMMER_COST.wood, HAMMER_COST.steel, HAMMER_COST.money]
-
-
-## Текст предложения оружия для подсказки: следующий ствол + цена.
-func _weapon_offer_text() -> String:
-	var player := get_tree().get_first_node_in_group("player")
-	if is_instance_valid(player) and player.has_method("next_unowned_weapon_index"):
-		var index: int = player.next_unowned_weapon_index()
-		if index < 0:
-			return "всё куплено"
-		var w: Dictionary = player.weapons[index]
-		return "%s (%d$)" % [w.name, int(w.get("price", 0))]
-	return "оружие"

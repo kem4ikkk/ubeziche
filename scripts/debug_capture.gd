@@ -78,18 +78,18 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(player.reload_time + 0.2).timeout
 		print("  player_ammo после перезарядки: ", player.current_ammo, " / ", player.magazine_size)
 
-	# 4.6) Арсенал + покупка оружия (Этап 4.6.2 / 4.7.2): в начале только
-	# пистолет; остальное покупается в мастерской по возрастанию цены.
+	# 4.6) Арсенал + покупка оружия (Этап 4.6.2 / 4.7.2; с 4.24 — на чёрном
+	# рынке): в начале только пистолет; остальное покупается за деньги.
 	if is_instance_valid(player) and player.has_method("switch_weapon"):
 		print("CLAUDE: пробую переключиться на оружие №2 ДО покупки")
 		player.switch_weapon(1)
 		print("  текущее оружие (ожидается Пистолет): ", player.weapons[player.current_weapon_index].name)
-		print("CLAUDE: покупаю весь арсенал в мастерской")
+		print("CLAUDE: покупаю весь арсенал на чёрном рынке")
 		InventorySystem.add_money(400)  # в тесте денег мало — добавим на весь арсенал
-		var workshop_w := get_tree().get_first_node_in_group("workshop")
-		while workshop_w != null:
+		var market_w := get_tree().get_first_node_in_group("black_market")
+		while market_w != null:
 			var money_before_w := InventorySystem.get_money()
-			if not workshop_w.buy_weapon():
+			if not market_w.buy_weapon():
 				break
 			print("  куплено: ", player.weapons[player.current_weapon_index].name,
 					" | деньги ", money_before_w, " → ", InventorySystem.get_money(), "$")
@@ -776,9 +776,32 @@ func _run_capture(args: PackedStringArray) -> void:
 			print("  меню навыков открыто: ", sm.visible)
 			sm.toggle()
 			print("  меню навыков закрыто: ", sm.visible)
-			# Оставляем открытым для финального скриншота (визуальная проверка UI).
-			sm.toggle()
 		_dump_state("ПОСЛЕ навыков (4.23)")
+
+	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
+	# меняет точку каждый день; рядом покупается оружие за деньги (тест покупки —
+	# в секции 4.6 выше через market.buy_weapon).
+	var market := get_tree().get_first_node_in_group("black_market")
+	if is_instance_valid(market) and market is Node3D:
+		print("CLAUDE: проверяю чёрный рынок (4.24)")
+		var pts: Array = market.spawn_points
+		var pos0: Vector3 = (market as Node3D).global_position
+		print("  стартовая точка рынка: ", pos0, " (из ", pts.size(), " точек), в списке: ", pos0 in pts)
+		# Эмулируем смену дня — точка должна остаться из списка и поменяться.
+		var changed := 0
+		for i in 5:
+			market._on_phase_changed(false)
+			if (market as Node3D).global_position != pos0:
+				changed += 1
+			pos0 = (market as Node3D).global_position
+		print("  за 5 «новых дней» точка менялась раз: ", changed,
+				", текущая в списке: ", (market as Node3D).global_position in pts)
+		# Ставим игрока перед рынком для визуальной проверки прилавка на скриншоте.
+		if player is Node3D and player.has_method("heal"):
+			player.heal(1000.0)
+			get_tree().paused = false
+			(player as Node3D).global_position = (market as Node3D).global_position + Vector3(0, 1, 4)
+		_dump_state("ПОСЛЕ чёрного рынка (4.24)")
 
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.

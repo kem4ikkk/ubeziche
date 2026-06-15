@@ -1,0 +1,34 @@
+[gd_scene load_steps=5 format=3 uid="uid://b8blackmarket001"]
+
+[ext_resource type="Script" path="res://scripts/black_market.gd" id="1_market"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_zone"]
+size = Vector3(3, 2, 3)
+
+[sub_resource type="BoxMesh" id="BoxMesh_stall"]
+size = Vector3(1.5, 1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_stall"]
+albedo_color = Color(0.5, 0.08, 0.08, 1)
+
+[node name="BlackMarket" type="Area3D"]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_market")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("BoxShape3D_zone")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("BoxMesh_stall")
+surface_material_override/0 = SubResource("StandardMaterial3D_stall")
+
+[node name="Prompt" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+billboard = 1
+no_depth_test = true
+font_size = 28
+text = "Чёрный рынок
+(подойдите ближе)"
