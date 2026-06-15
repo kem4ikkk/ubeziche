@@ -123,14 +123,22 @@ func _on_health_changed(current: float, maximum: float) -> void:
 
 
 func _on_ammo_changed(current: int, magazine: int) -> void:
-	ammo_label.text = "%s — Патроны: %d / %d" % [_weapon_name, current, magazine]
+	# Топор (Этап 4.21): magazine < 0 — оружие ближнего боя, патронов нет.
+	if magazine < 0:
+		ammo_label.text = "%s — ближний бой" % _weapon_name
+	else:
+		ammo_label.text = "%s — Патроны: %d / %d" % [_weapon_name, current, magazine]
 
 
 func _on_weapon_changed(weapon_name: String) -> void:
 	_weapon_name = weapon_name
 	var player := get_tree().get_first_node_in_group("player")
 	if is_instance_valid(player):
-		_on_ammo_changed(player.current_ammo, player.magazine_size)
+		# С топором патроны не показываем (Этап 4.21).
+		if "axe_equipped" in player and player.axe_equipped:
+			_on_ammo_changed(-1, -1)
+		else:
+			_on_ammo_changed(player.current_ammo, player.magazine_size)
 
 
 ## Индикаторы угроз (Этап 4.9).

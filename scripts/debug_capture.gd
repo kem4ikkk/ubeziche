@@ -627,6 +627,79 @@ func _run_capture(args: PackedStringArray) -> void:
 						" (ожидается +", player.repair_amount * 2.0, ")")
 		_dump_state("ПОСЛЕ молота")
 
+	# 6.99) Топор как стартовый инструмент (Этап 4.21): ЛКМ с топором —
+	# добыча/ремонт/ближний бой. Проверяем экипировку, бесплатный ремонт и
+	# удар по зомби.
+	if is_instance_valid(player) and player is Node3D:
+		print("CLAUDE: проверяю топор (4.21)")
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
+		# Убираем оставшихся зомби, чтобы они не добивали стену во время замера ремонта.
+		for e0 in get_tree().get_nodes_in_group("enemy"):
+			e0.queue_free()
+		# Экипировка: на старте топор; берём ствол → топор убран; Q → снова топор.
+		print("  axe_equipped на старте: ", player.axe_equipped)
+		player.switch_weapon(0)
+		print("  после взятия ствола axe_equipped: ", player.axe_equipped)
+		player.equip_axe()
+		print("  после Q axe_equipped: ", player.axe_equipped)
+		# У топора нет патронов/перезарядки: R при топоре не восполняет патроны.
+		player.current_ammo = 3
+		player.reload()
+		await get_tree().create_timer(0.1).timeout
+		print("  reload с топором: патроны 3 → ", player.current_ammo, " (не должны восполниться)")
+
+		# Бесплатный ремонт ударом топора: строим стену, ломаем, чиним.
+		if player.has_node("BuildSystem"):
+			var bs_a := player.get_node("BuildSystem")
+			for b in get_tree().get_nodes_in_group("building"):
+				b.queue_free()
+			InventorySystem.has_hammer = false
+			InventorySystem.add_resource("wall", 1)
+			(player as Node3D).global_position = Vector3(0, 1, 5)
+			if not bs_a.build_mode:
+				bs_a.toggle()
+			bs_a.select_buildable("Стена")
+			await get_tree().create_timer(0.3).timeout
+			bs_a.try_place()
+			if bs_a.build_mode:
+				bs_a.toggle()
+			var wall_a := get_tree().get_first_node_in_group("building")
+			if is_instance_valid(wall_a) and wall_a.has_method("take_damage"):
+				wall_a.take_damage(40.0)
+				await get_tree().create_timer(0.1).timeout
+				var hp_a0: float = wall_a.health.current_health
+				var wood_a0: int = InventorySystem.get_resource("wood")
+				player.swing_axe()   # игрок рядом — чинит ближайшую постройку бесплатно
+				await get_tree().create_timer(0.1).timeout
+				print("  ремонт топором: HP ", hp_a0, " → ", wall_a.health.current_health,
+						" (+", player.repair_amount, "); дерево ", wood_a0, " → ",
+						InventorySystem.get_resource("wood"), " (не должно убавиться)")
+
+		# Ближний бой топором: ставим свежего зомби прямо перед камерой (-Z).
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		await get_tree().create_timer(0.1).timeout
+		var zombie_scene: PackedScene = load("res://scenes/zombie.tscn")
+		if zombie_scene != null:
+			var z := zombie_scene.instantiate()
+			get_tree().current_scene.add_child(z)
+			(z as Node3D).global_position = (player as Node3D).global_position + Vector3(0, 0.6, -1.5)
+			await get_tree().create_timer(0.1).timeout
+			var zhp0: float = -1.0
+			if z.has_node("HealthComponent"):
+				zhp0 = (z.get_node("HealthComponent") as HealthComponent).current_health
+			player.swing_axe()
+			await get_tree().create_timer(0.1).timeout
+			if is_instance_valid(z) and z.has_node("HealthComponent"):
+				print("  удар топором по зомби: HP ", zhp0, " → ",
+						(z.get_node("HealthComponent") as HealthComponent).current_health,
+						" (урон топора ", player.axe_damage, ")")
+			else:
+				print("  удар топором по зомби: цель уничтожена (урон ", player.axe_damage, ")")
+		_dump_state("ПОСЛЕ топора (4.21)")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")

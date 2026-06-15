@@ -5,14 +5,14 @@ extends CharacterBody3D
 ##   WASD  — движение
 ##   Мышь  — обзор
 ##   Space — прыжок
-##   ЛКМ   — выстрел (если курсор захвачен) / захватить курсор
+##   ЛКМ   — с топором: добыча/ремонт/ближний бой (swing_axe); со стволом: выстрел
+##   Q     — взять топор (Этап 4.21, стартовый инструмент)
 ##   R     — перезарядка оружия
-##   F     — отремонтировать ближайшую постройку (1 дерево → +15 HP)
-##   1-5   — переключить оружие (только купленное; в начале есть лишь пистолет)
-##   B     — режим постройки; V — сменить тип (стена/турель); ЛКМ — поставить
+##   1-5   — переключить оружие (только купленное; берётся вместо топора)
+##   B     — режим постройки; V — сменить тип; ЛКМ — поставить
 ##   Esc   — отпустить курсор
-## Крафт и магазин (клавиши C / G / H / J) теперь работают только рядом с
-## мастерской — см. scripts/workshop.gd (Этап 4.7.3). Оружие покупается там же.
+## Топор (Этап 4.21) есть с начала игры: ремонт построек теперь бесплатным
+## ударом топора (без траты дерева), им же добываем ресурсы (5.2) и бьём зомби.
 
 signal ammo_changed(current: int, magazine: int)
 signal weapon_changed(weapon_name: String)
@@ -45,10 +45,15 @@ var _owned: Array[bool] = []
 var current_ammo: int = magazine_size
 var _reloading: bool = false
 
-# Ремонт построек
-@export var repair_range: float = 4.0     # дистанция ремонта, м (с запасом на привязку к сетке)
-@export var repair_amount: float = 15.0   # сколько HP восстанавливает ремонт
-const REPAIR_COST := {"wood": 1}
+# Ремонт построек — теперь бесплатным ударом топора (Этап 4.21), без траты дерева.
+@export var repair_range: float = 4.0     # радиус ремонта ближайшей постройки, м
+@export var repair_amount: float = 15.0   # сколько HP восстанавливает один удар
+
+# Топор (Этап 4.21): стартовый инструмент. Им добываем ресурсы (4.22), чиним
+# постройки и бьём зомби в ближнем бою. ЛКМ с топором → swing_axe().
+@export var axe_damage: float = 25.0      # урон топором по зомби за удар
+@export var axe_range: float = 3.0        # дальность удара/луча топора, м
+var axe_equipped: bool = true             # на старте в руках топор, а не ствол
 
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
@@ -80,6 +85,8 @@ func _ready() -> void:
 	_apply_weapon(current_weapon_index)
 
 	ammo_changed.emit(current_ammo, magazine_size)
+	# На старте в руках топор — сообщаем HUD после готовности всей сцены.
+	weapon_changed.emit.call_deferred("Топор")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -98,9 +105,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if build_system.build_mode:
-				build_system.try_place()                  # в режиме постройки — строим стену
+				build_system.try_place()                  # в режиме постройки — строим
+			elif axe_equipped:
+				swing_axe()                                # топор: добыча/ремонт/ближний бой
 			else:
-				shoot()                                    # иначе — стреляем
+				shoot()                                    # ствол: стреляем
 		else:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED  # заново захватываем курсор
 
@@ -120,9 +129,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode >= KEY_1 and event.keycode <= KEY_5:
 		switch_weapon(event.keycode - KEY_1)
 
-	# F — отремонтировать постройку, на которую смотрим.
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
-		repair_target()
+	# Q — взять топор (снимает ствол). Стволы берутся клавишами 1-5.
+	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
+		equip_axe()
 
 	# Esc — отпустить курсор.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -212,6 +221,8 @@ func shoot() -> void:
 
 ## Перезарядка оружия (Этап 4.6.1): занимает reload_time секунд.
 func reload() -> void:
+	if axe_equipped:
+		return  # у топора нет патронов и перезарядки (Этап 4.21)
 	if _reloading or current_ammo == magazine_size:
 		return
 	_reloading = true
@@ -228,7 +239,10 @@ func reload() -> void:
 ## и подгружает параметры/патроны нового. Во время перезарядки не даём
 ## переключиться, чтобы не было путаницы со временем перезарядки.
 func switch_weapon(index: int) -> void:
-	if index == current_weapon_index or index < 0 or index >= weapons.size():
+	if index < 0 or index >= weapons.size():
+		return
+	# Если в руках топор — даём взять даже текущий по индексу ствол.
+	if not axe_equipped and index == current_weapon_index:
 		return
 	if _reloading:
 		print("CLAUDE: нельзя переключить оружие во время перезарядки")
@@ -237,11 +251,24 @@ func switch_weapon(index: int) -> void:
 		print("CLAUDE: оружие ", weapons[index].name, " ещё не куплено")
 		return
 
+	axe_equipped = false   # взяли ствол — топор убран
 	_ammo_in_weapon[current_weapon_index] = current_ammo
 	_apply_weapon(index)
 	ammo_changed.emit(current_ammo, magazine_size)
 	weapon_changed.emit(weapons[current_weapon_index].name)
 	print("CLAUDE: оружие переключено на ", weapons[current_weapon_index].name)
+
+
+## Взять топор (Этап 4.21): снимает ствол, ЛКМ начинает бить топором.
+func equip_axe() -> void:
+	if axe_equipped:
+		return
+	if _reloading:
+		print("CLAUDE: нельзя сменить инструмент во время перезарядки")
+		return
+	axe_equipped = true
+	weapon_changed.emit("Топор")
+	print("CLAUDE: в руках топор")
 
 
 ## Куплено ли оружие с индексом index (Этап 4.7.2).
@@ -287,11 +314,50 @@ func _apply_weapon(index: int) -> void:
 	current_ammo = _ammo_in_weapon[index]
 
 
-## Ремонт ближайшей постройки (стены) рядом с игроком (Этап 4.3).
-## Стены низкие (1 м), а камера на высоте 1.6 м — горизонтальный луч
-## по ним не попадает, поэтому ищем по дистанции, а не по лучу.
-## Стоит 1 дерево, восстанавливает repair_amount HP.
-func repair_target() -> void:
+## Удар топором (Этап 4.21): луч из камеры — действуем по тому, на что смотрим.
+## Приоритет: узел ресурса (добыча, 4.22) → зомби (ближний бой) → постройка
+## (ремонт). Стены низкие (1 м), камера на 1.6 м — если луч прошёл мимо,
+## чиним ближайшую постройку в радиусе repair_range.
+func swing_axe() -> void:
+	var target := _axe_raycast_target()
+	if target != null:
+		if target.is_in_group("resource_node") and target.has_method("hit"):
+			var got: int = target.hit()          # добыча (этап 4.22)
+			if got > 0:
+				print("Добыто ресурса: +", got)
+			return
+		if target.is_in_group("enemy") and target.has_method("take_damage"):
+			target.take_damage(axe_damage)
+			print("Удар топором по зомби: -", axe_damage, " HP")
+			return
+		if target.is_in_group("building") and target.has_method("repair"):
+			_repair_building(target)
+			return
+	# Луч мимо (стены низкие) — чиним ближайшую постройку в радиусе.
+	var nearest := _nearest_building()
+	if nearest != null:
+		_repair_building(nearest)
+	else:
+		print("CLAUDE: топор бьёт по воздуху")
+
+
+## Луч из камеры вперёд (учитывает Area3D — узлы ресурсов это Area3D).
+func _axe_raycast_target() -> Node:
+	var space_state := get_world_3d().direct_space_state
+	var from := camera.global_position
+	var to := from + (-camera.global_transform.basis.z) * axe_range
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [get_rid()]
+	query.collide_with_areas = true
+	query.collide_with_bodies = true
+	var result := space_state.intersect_ray(query)
+	if result:
+		return result.collider
+	return null
+
+
+## Ближайшая постройка в радиусе repair_range (стены низкие — луч их минует).
+func _nearest_building() -> Node3D:
 	var nearest: Node3D = null
 	var nearest_dist := repair_range
 	for node in get_tree().get_nodes_in_group("building"):
@@ -301,27 +367,27 @@ func repair_target() -> void:
 		if dist <= nearest_dist:
 			nearest = node
 			nearest_dist = dist
+	return nearest
 
-	if not is_instance_valid(nearest):
-		print("CLAUDE: нечего ремонтировать")
-		return
 
-	if nearest.has_method("is_full_health") and nearest.is_full_health():
+## Бесплатный ремонт постройки ударом топора (Этап 4.21: без траты дерева).
+## С молотом (has_hammer) восстанавливаем вдвое больше HP за удар.
+func _repair_building(node: Node) -> void:
+	if node.has_method("is_full_health") and node.is_full_health():
 		print("CLAUDE: постройка уже на максимум HP")
 		return
-
-	for resource_type in REPAIR_COST:
-		if InventorySystem.get_resource(resource_type) < REPAIR_COST[resource_type]:
-			print("CLAUDE: не хватает ресурсов для ремонта")
-			return
-
-	for resource_type in REPAIR_COST:
-		InventorySystem.use_resource(resource_type, REPAIR_COST[resource_type])
-
-	# С молотом (Этап 4.17) ремонт восстанавливает вдвое больше HP за удар.
 	var amount := repair_amount * 2.0 if InventorySystem.has_hammer else repair_amount
-	nearest.repair(amount)
+	node.repair(amount)
 	print("Постройка отремонтирована (+", amount, " HP)")
+
+
+## Совместимость с тестами/старым кодом: чинит ближайшую постройку (бесплатно).
+func repair_target() -> void:
+	var nearest := _nearest_building()
+	if nearest == null:
+		print("CLAUDE: нечего ремонтировать")
+		return
+	_repair_building(nearest)
 
 
 ## Урон по игроку (например, от зомби).
