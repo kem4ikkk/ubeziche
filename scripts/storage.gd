@@ -1,18 +1,12 @@
 extends StaticBody3D
 
-## Склад боеприпасов (Этап 4.8.2): со временем пополняет общий боезапас
-## турелей (хранимые припасы кормят оборону) — пассивный источник расходника
-## для турелей в дополнение к покупке в мастерской.
-## Как и другие постройки, входит в группу "building": зомби её ломают,
-## игрок чинит на F.
-
-@export var supply_interval: float = 2.0  # как часто пополнять, с
-@export var supply_amount: int = 1        # сколько боезапаса за тик
+## Склад (Этап 4.8.2). Раньше пополнял «боезапас турелей», но боезапас убран
+## (Этап 4.25) — постройка временно выведена из меню постройки (build_system).
+## Сам объект оставлен как обычная постройка (HP, ремонт) на случай ручного
+## размещения; будущая роль — хранилище/лимит ресурсов (Warehouse), см. разд. 19.
 
 @onready var health: HealthComponent = $HealthComponent
 @onready var hp_label: Label3D = $HPLabel
-
-var _timer: float = 0.0
 
 
 func _ready() -> void:
@@ -21,14 +15,6 @@ func _ready() -> void:
 	health.died.connect(_on_died)
 	health.health_changed.connect(_on_health_changed)
 	_on_health_changed(health.current_health, health.max_health)
-
-
-func _process(delta: float) -> void:
-	_timer += delta
-	if _timer >= supply_interval:
-		_timer -= supply_interval
-		InventorySystem.add_resource("turret_ammo", supply_amount)
-		print("Склад: +", supply_amount, " боезапаса турелей")
 
 
 func take_damage(amount: float) -> void:

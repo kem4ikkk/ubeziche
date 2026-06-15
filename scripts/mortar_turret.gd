@@ -1,14 +1,13 @@
 extends "res://scripts/turret.gd"
 
 ## Мортирная турель (Этап 4.8.3): навесной огонь по площади.
-## В отличие от обычной турели — стреляет реже и тратит больше боезапаса
-## за выстрел, но наносит урон всем врагам в радиусе splash_radius вокруг
-## цели. Эффективна против скоплений зомби и (как и обычная турель —
-## без проверки линии видимости) бьёт даже из-за стен/построек.
+## В отличие от обычной турели — стреляет реже, но наносит урон всем врагам
+## в радиусе splash_radius вокруг цели. Эффективна против скоплений зомби и
+## (как и обычная турель — без проверки линии видимости) бьёт из-за стен.
+## Боезапаса нет (убран в 4.25) — работает, пока есть питание.
 
 @export var splash_radius: float = 3.0
 @export var splash_damage: float = 10.0
-@export var ammo_cost: int = 2
 
 
 func _ready() -> void:
@@ -16,12 +15,9 @@ func _ready() -> void:
 	add_to_group("mortar")
 
 
-## Залп по площади: центральная цель получает turret_damage,
-## остальные враги в splash_radius — splash_damage.
+## Залп по площади (Этап 4.25: без боезапаса, питание проверено в _physics_process):
+## центральная цель получает turret_damage, остальные в splash_radius — splash_damage.
 func _try_fire(target: Node3D) -> void:
-	if InventorySystem.get_resource("turret_ammo") < ammo_cost:
-		return
-	InventorySystem.use_resource("turret_ammo", ammo_cost)
 	var impact := target.global_position
 	var hit_count := 0
 	for enemy in get_tree().get_nodes_in_group("enemy"):

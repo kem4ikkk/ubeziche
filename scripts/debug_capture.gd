@@ -29,11 +29,6 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	print("CLAUDE: прогон активен (", total, " c): действия + снимок")
 
-	# 0) Электричество (Этап 4.16) не собирается на карте, а копится медленно
-	# от генераторов — выдаём запас сразу, чтобы тесты турелей не зависели
-	# от тайминга производства.
-	InventorySystem.add_resource("electricity", 20)
-
 	# 1) Даём сцене инициализироваться.
 	await get_tree().create_timer(0.5).timeout
 	_dump_state("ДО действий")
@@ -142,21 +137,14 @@ func _run_capture(args: PackedStringArray) -> void:
 		var crafted: bool = workshop.craft_wall()
 		print("  крафт стены (ресурсы): ", crafted, " | дерево ", wood_before, " → ",
 				InventorySystem.get_resource("wood"), ", стен: ", InventorySystem.get_resource("wall"))
-		# Покупка стены за деньги.
+		# Этап 4.25: деньги тратятся ТОЛЬКО на оружие (чёрный рынок). Крафт/
+		# постройки/тир идут за ресурсы; покупки за деньги в мастерской убраны.
+		# (Апгрейд тира за ресурсы проверяется отдельно в секции тиров 6.94.)
 		var money_before := InventorySystem.get_money()
-		var walls_before := InventorySystem.get_resource("wall")
-		var bought: bool = workshop.buy_wall()
-		print("  покупка стены за деньги: ", bought, " | деньги ", money_before, " → ",
-				InventorySystem.get_money(), "$, стен ", walls_before, " → ", InventorySystem.get_resource("wall"))
-		# Лечение за деньги: сначала раним игрока, потом лечим.
-		if is_instance_valid(player) and player.has_method("take_damage"):
-			player.take_damage(40.0)
-		var hp_before: float = player.get_health() if is_instance_valid(player) else 0.0
-		var money_before2 := InventorySystem.get_money()
-		var healed: bool = workshop.buy_heal()
-		var hp_after: float = player.get_health() if is_instance_valid(player) else 0.0
-		print("  покупка лечения: ", healed, " | HP ", hp_before, " → ", hp_after,
-				", деньги ", money_before2, " → ", InventorySystem.get_money(), "$")
+		InventorySystem.add_resource("wood", 2)
+		workshop.craft_wall()
+		print("  крафт стены за ресурсы, деньги не тронуты: ", money_before == InventorySystem.get_money())
+		print("  turret_ammo убран из инвентаря: ", not ("turret_ammo" in InventorySystem.inventory))
 		# Проверяем зону мастерской: подводим игрока вплотную к верстаку.
 		if is_instance_valid(player) and player is Node3D:
 			(player as Node3D).global_position = Vector3(-3, 1, 3)
@@ -229,11 +217,16 @@ func _run_capture(args: PackedStringArray) -> void:
 
 	_dump_state("ПОСЛЕ спавна танка")
 
-	# 6.7) Турель (Этап 4.8.1): выбираем турель в режиме постройки, строим её,
-	# покупаем боезапас и проверяем, что она сама стреляет по зомби.
+	# 6.7) Турель (Этап 4.8.1): строим турель и проверяем, что она сама стреляет
+	# по зомби. Боезапаса больше нет (4.25) — турель работает от питания.
 	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
 		var bs := player.get_node("BuildSystem")
 		print("CLAUDE: строю турель")
+		# Игрок мог погибнуть в волне выше — лечим и снимаем паузу, иначе турель
+		# (физика) не работает и стрельба/питание не проверятся.
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
 		InventorySystem.add_resource("wood", 5)
 		InventorySystem.add_resource("steel", 5)
 		(player as Node3D).global_position = Vector3(0, 1, 5)
@@ -246,13 +239,8 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  турель построена: ", placed_turret)
 		if bs.build_mode:
 			bs.toggle()
-		# Покупаем боезапас турелей в мастерской.
-		var workshop_t := get_tree().get_first_node_in_group("workshop")
-		InventorySystem.add_money(50)
-		if workshop_t != null:
-			workshop_t.buy_turret_ammo()
-		var ammo_before := InventorySystem.get_resource("turret_ammo")
-		print("  боезапас турелей: ", ammo_before)
+		# Питание вместо боезапаса (4.25): электричество + генератор.
+		_ensure_power()
 		# Спавним зомби в зоне действия турели и ждём авто-стрельбу.
 		if wave_manager != null and wave_manager.zombie_scene != null:
 			var z: Node = wave_manager.zombie_scene.instantiate()
@@ -263,20 +251,18 @@ func _run_capture(args: PackedStringArray) -> void:
 			var hp_after := -1.0
 			if is_instance_valid(z) and z.has_method("get_health"):
 				hp_after = z.get_health()
-			print("  цель турели: HP ", hp_before, " → ", hp_after, " (-1 = уничтожена)")
-		print("  боезапас после стрельбы: ", ammo_before, " → ", InventorySystem.get_resource("turret_ammo"))
+			print("  цель турели (без боезапаса, от питания): HP ", hp_before, " → ", hp_after, " (-1 = уничтожена)")
 		_dump_state("ПОСЛЕ турели")
 
-	# 6.8) Лазарет и склад (Этап 4.8.2): строим оба и проверяем, что лазарет
-	# лечит игрока рядом, а склад со временем пополняет боезапас турелей.
+	# 6.8) Лазарет (Этап 4.8.2): строим и проверяем, что лечит игрока рядом.
+	# Склад убран из построек (4.25) — лечение деньгами тоже убрано, реген HP
+	# теперь только через Лазарет.
 	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
 		var bs2 := player.get_node("BuildSystem")
-		# Чистим врагов, чтобы турель не тратила боезапас во время проверки склада.
 		for enemy in get_tree().get_nodes_in_group("enemy"):
 			enemy.queue_free()
 		InventorySystem.add_resource("wood", 10)
 		InventorySystem.add_resource("steel", 10)
-		# --- Лазарет ---
 		print("CLAUDE: строю лазарет")
 		(player as Node3D).global_position = Vector3(6, 1, 5)
 		if not bs2.build_mode:
@@ -285,6 +271,8 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(0.3).timeout
 		var placed_inf: bool = bs2.try_place()
 		print("  лазарет построен: ", placed_inf, " (выбрано: ", bs2.current_buildable_name(), ")")
+		if bs2.build_mode:
+			bs2.toggle()
 		# Раним игрока и ставим его вплотную к лазарету — должен лечить.
 		if player.has_method("take_damage"):
 			player.take_damage(40.0)
@@ -292,24 +280,9 @@ func _run_capture(args: PackedStringArray) -> void:
 		(player as Node3D).global_position = Vector3(6, 1, 3)
 		await get_tree().create_timer(1.5).timeout
 		print("  лазарет лечит: HP ", hp_before_heal, " → ", player.get_health())
-		# --- Склад ---
-		print("CLAUDE: строю склад боеприпасов")
-		bs2.select_buildable("Склад")
-		await get_tree().create_timer(0.3).timeout
-		var placed_st: bool = bs2.try_place()
-		print("  склад построен: ", placed_st, " (выбрано: ", bs2.current_buildable_name(), ")")
-		if bs2.build_mode:
-			bs2.toggle()
-		# Убираем турели на время замера склада, чтобы они не тратили боезапас
-		# (их работу уже проверили выше) — так виден чистый прирост от склада.
-		for turret in get_tree().get_nodes_in_group("turret"):
-			turret.queue_free()
-		for enemy in get_tree().get_nodes_in_group("enemy"):
-			enemy.queue_free()
-		var ammo_before_storage := InventorySystem.get_resource("turret_ammo")
-		await get_tree().create_timer(4.5).timeout  # ждём ~2 тика склада
-		print("  склад пополняет боезапас: ", ammo_before_storage, " → ", InventorySystem.get_resource("turret_ammo"))
-		_dump_state("ПОСЛЕ лазарета и склада")
+		# Склад из меню построек убран (4.25): попытка выбрать его должна провалиться.
+		print("  «Склад» в меню построек отсутствует: ", not bs2.select_buildable("Склад"))
+		_dump_state("ПОСЛЕ лазарета")
 
 	# 6.9) Джаггернаут (Этап 4.10): мини-босс с большим HP, целящийся в
 	# постройки, но переключающийся на игрока в радиусе аггро (риск/выгода).
@@ -375,9 +348,9 @@ func _run_capture(args: PackedStringArray) -> void:
 
 		for b in get_tree().get_nodes_in_group("building"):
 			b.queue_free()
-		InventorySystem.add_resource("wood", 200)
-		InventorySystem.add_resource("steel", 200)
-		InventorySystem.add_money(1000)
+		# Ресурсы капятся 40 (RESOURCE_CAP) — перед каждым апгрейдом «догоняем»
+		# запас до кэпа напрямую (имитация сбора), цены тиров ≤ 40 (4.25).
+		_top_resources()
 		(player as Node3D).global_position = Vector3(0, 1, 5)
 		if not bs_t.build_mode:
 			bs_t.toggle()
@@ -400,6 +373,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		var placed_g2: bool = bs_t.try_place()
 		print("  гатлинг на Тир 2: ", placed_g2, " (ожидается false)")
 
+		_top_resources()
 		var up3: bool = workshop_t.upgrade_shelter_tier()
 		print("  апгрейд до Тир 3: ", up3, ", текущий тир: ", InventorySystem.shelter_tier)
 		var placed_g3: bool = bs_t.try_place()
@@ -407,6 +381,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		for b in get_tree().get_nodes_in_group("building"):
 			b.queue_free()
 
+		_top_resources()
 		var up4: bool = workshop_t.upgrade_shelter_tier()
 		print("  апгрейд до Тир 4: ", up4, ", текущий тир: ", InventorySystem.shelter_tier)
 		var up5: bool = workshop_t.upgrade_shelter_tier()
@@ -423,6 +398,9 @@ func _run_capture(args: PackedStringArray) -> void:
 	# сплеш-уроном (по площади), а не только ближайшую цель.
 	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
 		print("CLAUDE: проверяю мортиру (4.8.3)")
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
 		for enemy in get_tree().get_nodes_in_group("enemy"):
 			enemy.queue_free()
 		for b in get_tree().get_nodes_in_group("building"):
@@ -430,7 +408,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		var bs3 := player.get_node("BuildSystem")
 		InventorySystem.add_resource("wood", 10)
 		InventorySystem.add_resource("steel", 10)
-		InventorySystem.add_resource("turret_ammo", 10)
+		_ensure_power()  # турели/мортира работают от питания (4.25), не от боезапаса
 		(player as Node3D).global_position = Vector3(0, 1, 5)
 		if not bs3.build_mode:
 			bs3.toggle()
@@ -456,7 +434,6 @@ func _run_capture(args: PackedStringArray) -> void:
 		for zc in cluster:
 			hp_list_after.append(zc.get_health() if is_instance_valid(zc) and zc.has_method("get_health") else -1.0)
 		print("  HP кучки после мортиры: ", hp_list_after, " (-1 = уничтожен)")
-		print("  боезапас после: ", InventorySystem.get_resource("turret_ammo"))
 		_dump_state("ПОСЛЕ мортиры")
 
 	# 6.96) Гатлинг-турель (Этап 4.8.4): разнообразие турелей — дешёвая ранняя
@@ -464,6 +441,9 @@ func _run_capture(args: PackedStringArray) -> void:
 	# стрельбы (и расходом боезапаса). Сравниваем DPS по одной цели.
 	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
 		print("CLAUDE: проверяю гатлинг-турель (4.8.4)")
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
 		for enemy in get_tree().get_nodes_in_group("enemy"):
 			enemy.queue_free()
 		for b in get_tree().get_nodes_in_group("building"):
@@ -471,7 +451,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		var bs4 := player.get_node("BuildSystem")
 		InventorySystem.add_resource("wood", 10)
 		InventorySystem.add_resource("steel", 15)
-		InventorySystem.add_resource("turret_ammo", 20)
+		_ensure_power()  # гатлинг работает от питания (4.25), не от боезапаса
 		(player as Node3D).global_position = Vector3(0, 1, 5)
 		if not bs4.build_mode:
 			bs4.toggle()
@@ -481,7 +461,6 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  гатлинг построен: ", placed_gatling, " (выбрано: ", bs4.current_buildable_name(), ")")
 		if bs4.build_mode:
 			bs4.toggle()
-		var ammo_before_g := InventorySystem.get_resource("turret_ammo")
 		# Одна цель в зоне действия — за 1 секунду гатлинг успевает выстрелить
 		# заметно чаще, чем обычная турель (интервал 0.3с против 0.8с).
 		if wave_manager != null and wave_manager.zombie_scene != null:
@@ -494,16 +473,21 @@ func _run_capture(args: PackedStringArray) -> void:
 			if is_instance_valid(zg) and zg.has_method("get_health"):
 				hp_after_g = zg.get_health()
 			print("  цель гатлинга за 1с: HP ", hp_before_g, " → ", hp_after_g, " (-1 = уничтожена)")
-		print("  боезапас: ", ammo_before_g, " → ", InventorySystem.get_resource("turret_ammo"))
 		_dump_state("ПОСЛЕ гатлинга")
 
-	# 6.97) Система питания (Этап 4.14, переработана в 4.16): генераторы
-	# производят электричество (InventorySystem "electricity"), турели его
-	# тратят за выстрел. Без электричества/генератора турели простаивают
-	# (метка "нет питания"), при восстановлении питания — снова стреляют.
+	# 6.97) Система питания (Этап 4.14; модель мощности с 4.25): генератор даёт
+	# фиксированную мощность (40), турель её потребляет (30). Без генератора
+	# турель простаивает (метка "нет питания"); при 1 генераторе вторая турель
+	# не влезает в бюджет и стоит, а первая работает («остальные работают»).
 	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D \
 			and wave_manager != null and wave_manager.zombie_scene != null:
-		print("CLAUDE: проверяю систему питания (4.14)")
+		print("CLAUDE: проверяю систему питания (4.25)")
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
+		# Фиксируем Тир 1, чтобы генератор давал ровно 40 (на Тир 4 было бы 60) —
+		# тогда бюджет 1 генератор vs 2 турели детерминирован.
+		InventorySystem.set_tier(1)
 		for enemy in get_tree().get_nodes_in_group("enemy"):
 			enemy.queue_free()
 		for t in get_tree().get_nodes_in_group("turret"):
@@ -511,7 +495,6 @@ func _run_capture(args: PackedStringArray) -> void:
 		var bs5 := player.get_node("BuildSystem")
 		InventorySystem.add_resource("wood", 10)
 		InventorySystem.add_resource("steel", 10)
-		InventorySystem.add_resource("turret_ammo", 20)
 		(player as Node3D).global_position = Vector3(0, 1, 5)
 		if not bs5.build_mode:
 			bs5.toggle()
@@ -534,51 +517,72 @@ func _run_capture(args: PackedStringArray) -> void:
 			print("  генератор отстроен заново: ", placed_gen)
 			if bs5.build_mode:
 				bs5.toggle()
-		# Электричество не собирается на карте — выдаём напрямую для теста.
-		InventorySystem.add_resource("electricity", 20)
-		print("  электричество: ", InventorySystem.get_resource("electricity"),
-				", генераторов в сцене: ", get_tree().get_nodes_in_group("generator").size())
+		print("  генераторов: ", get_tree().get_nodes_in_group("generator").size(),
+				", турелей: ", get_tree().get_nodes_in_group("turret").size(),
+				" (генератор 40 ≥ турель 30 → питание есть)")
 
-		# С питанием — турель должна навестись и стрелять.
+		# С питанием (есть генератор) — турель наводится и стреляет.
 		var zp: Node = wave_manager.zombie_scene.instantiate()
 		get_tree().current_scene.add_child(zp)
 		(zp as Node3D).global_position = Vector3(0, 1, -3)
 		var hp_p_before: float = zp.get_health() if zp.has_method("get_health") else 0.0
 		await get_tree().create_timer(1.0).timeout
 		var hp_p_after: float = zp.get_health() if is_instance_valid(zp) and zp.has_method("get_health") else -1.0
-		print("  с питанием: HP цели ", hp_p_before, " → ", hp_p_after,
+		print("  с генератором: HP цели ", hp_p_before, " → ", hp_p_after,
 				", power_label.visible: ", turret_node.power_label.visible if is_instance_valid(turret_node) else "?")
 		if is_instance_valid(zp):
 			zp.queue_free()
 
-		# Отключаем питание: электричество в ноль.
-		InventorySystem.inventory["electricity"] = 0
-		InventorySystem.inventory_changed.emit(InventorySystem.inventory)
+		# Убираем генераторы — мощности 0, турель простаивает.
+		for g in get_tree().get_nodes_in_group("generator"):
+			g.queue_free()
+		await get_tree().create_timer(0.2).timeout
 		var zn: Node = wave_manager.zombie_scene.instantiate()
 		get_tree().current_scene.add_child(zn)
 		(zn as Node3D).global_position = Vector3(0, 1, -3)
 		var hp_n_before: float = zn.get_health() if zn.has_method("get_health") else 0.0
 		await get_tree().create_timer(1.0).timeout
 		var hp_n_after: float = zn.get_health() if is_instance_valid(zn) and zn.has_method("get_health") else -1.0
-		print("  без электричества: HP цели ", hp_n_before, " → ", hp_n_after,
+		print("  без генератора: HP цели ", hp_n_before, " → ", hp_n_after,
 				", power_label.visible: ", turret_node.power_label.visible if is_instance_valid(turret_node) else "?")
 		if is_instance_valid(hud):
-			print("  HUD alert при отключении питания: '", hud.alert_label.text, "'")
+			print("  HUD alert (нет питания): '", hud.alert_label.text, "'")
 		if is_instance_valid(zn):
 			zn.queue_free()
 
-		# Восстанавливаем электричество — турель снова должна стрелять.
-		InventorySystem.add_resource("electricity", 20)
+		# Возвращаем генератор — турель снова работает.
+		_ensure_power()
+		await get_tree().create_timer(0.2).timeout
 		var zr: Node = wave_manager.zombie_scene.instantiate()
 		get_tree().current_scene.add_child(zr)
 		(zr as Node3D).global_position = Vector3(0, 1, -3)
 		var hp_r_before: float = zr.get_health() if zr.has_method("get_health") else 0.0
 		await get_tree().create_timer(1.0).timeout
 		var hp_r_after: float = zr.get_health() if is_instance_valid(zr) and zr.has_method("get_health") else -1.0
-		print("  электричество восстановлено: HP цели ", hp_r_before, " → ", hp_r_after,
+		print("  генератор возвращён: HP цели ", hp_r_before, " → ", hp_r_after,
 				", power_label.visible: ", turret_node.power_label.visible if is_instance_valid(turret_node) else "?")
-		if is_instance_valid(hud):
-			print("  HUD alert при восстановлении питания: '", hud.alert_label.text, "'")
+		if is_instance_valid(zr):
+			zr.queue_free()
+
+		# Бюджет мощности: при 1 генераторе (40) вторая турель (30+30=60>40) не
+		# питается, а первая работает («остальные работают»).
+		var gen_count := get_tree().get_nodes_in_group("generator").size()
+		InventorySystem.add_resource("wood", 5)
+		InventorySystem.add_resource("steel", 5)
+		(player as Node3D).global_position = Vector3(2, 1, 5)
+		if not bs5.build_mode:
+			bs5.toggle()
+		bs5.select_buildable("Турель")
+		await get_tree().create_timer(0.3).timeout
+		bs5.try_place()
+		if bs5.build_mode:
+			bs5.toggle()
+		await get_tree().create_timer(0.2).timeout
+		var powered_states: Array = []
+		for t in get_tree().get_nodes_in_group("turret"):
+			powered_states.append(not t.power_label.visible)
+		print("  генераторов: ", gen_count, ", турелей: ", get_tree().get_nodes_in_group("turret").size(),
+				", запитаны по порядку: ", powered_states, " (ожидается [true, false] при 1 генераторе)")
 		_dump_state("ПОСЛЕ системы питания")
 
 	# 6.98) Молот (Этап 4.17): крафтится один раз в мастерской и удваивает
@@ -842,6 +846,32 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("CLAUDE: не удалось сохранить скриншот")
 
 	get_tree().quit()
+
+
+## Заполняет дерево/сталь до кэпа RESOURCE_CAP напрямую (минуя cap в add_resource)
+## — имитация «собрал максимум» перед апгрейдом тира в тестах (Этап 4.25).
+func _top_resources() -> void:
+	InventorySystem.inventory["wood"] = InventorySystem.RESOURCE_CAP
+	InventorySystem.inventory["steel"] = InventorySystem.RESOURCE_CAP
+	InventorySystem.inventory_changed.emit(InventorySystem.inventory)
+
+
+## Гарантирует питание турелей в тестах (Этап 4.25): модель мощности — питание
+## даёт генератор (40), поэтому если генератора в сцене нет (предыдущие тесты
+## чистят постройки), ставим один.
+func _ensure_power() -> void:
+	# Считаем только «живые» генераторы — queue_free отложен, и только что
+	# удалённый генератор ещё числится в группе этот кадр (иначе пропустили бы).
+	var alive := false
+	for g in get_tree().get_nodes_in_group("generator"):
+		if is_instance_valid(g) and not g.is_queued_for_deletion():
+			alive = true
+			break
+	if not alive:
+		var gen_scene: PackedScene = load("res://scenes/generator.tscn")
+		var gen := gen_scene.instantiate()
+		get_tree().current_scene.add_child(gen)
+		(gen as Node3D).global_position = Vector3(4, 0.5, 6)
 
 
 ## Печатает ключевое состояние сцены — это я читаю из консоли.

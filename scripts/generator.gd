@@ -1,30 +1,17 @@
 extends StaticBody3D
 
-## Генератор (Этап 4.14, переработан в 4.16): ПРОИЗВОДИТ электричество
-## (InventorySystem "electricity") — общий запас, которым питаются турели.
-## В отличие от дерева/стали электричество не собирается на карте: его дают
-## только генераторы (build_system.gd ограничивает их число до MAX_GENERATORS).
-## Каждый живой генератор раз в electricity_production_interval секунд
-## добавляет electricity_per_tick электричества в общий запас, но не выше
-## storage_capacity (на этот генератор) — итоговый лимит запаса равен сумме
-## storage_capacity всех живых генераторов.
-## Пока электричество в запасе > 0 и есть хотя бы один живой генератор — все
-## турели (Турель/Мортира/Гатлинг, проверка в turret.gd: _has_power) наводятся
-## и стреляют как обычно. Если запас опустел или генераторы разрушены —
-## турели простаивают (видна метка "нет питания").
-## Как и другие постройки, входит в группу "building": зомби его ломают,
-## игрок чинит на F.
+## Генератор (Этап 4.14; модель питания переработана в 4.25). Даёт фиксированную
+## МОЩНОСТЬ (power_output), пока стоит — это не запас, а постоянная отдача, как
+## ватты. Турели потребляют мощность (turret.gd: power_cost); если суммарной
+## мощности всех генераторов не хватает на турель — эта турель простаивает,
+## а остальные (что влезли в бюджет) работают. Тир 4 (4.15) повышает отдачу.
+## Как и другие постройки — в группе "building": зомби ломают, игрок чинит топором.
 
-@export var electricity_production_interval: float = 4.0  # секунд на 1 ед. электричества
-@export var electricity_per_tick: int = 1
-@export var storage_capacity: int = 10  # вклад этого генератора в общий лимит запаса
+@export var power_output: int = 40  # базовая мощность (маленький 40 / средний 60 / большой 80)
 
 @onready var health: HealthComponent = $HealthComponent
 @onready var hp_label: Label3D = $HPLabel
 @onready var fan: Node3D = $Fan
-
-var _produce_timer: float = 0.0
-var _was_powered: bool = true
 
 
 func _ready() -> void:
@@ -33,38 +20,16 @@ func _ready() -> void:
 	health.died.connect(_on_died)
 	health.health_changed.connect(_on_health_changed)
 	_on_health_changed(health.current_health, health.max_health)
-	_was_powered = InventorySystem.get_resource("electricity") > 0
 
 
 func _process(delta: float) -> void:
 	if is_instance_valid(fan):
 		fan.rotate_y(delta * 6.0)
 
-	_produce_timer += delta
-	var interval := electricity_production_interval
-	if InventorySystem.shelter_tier >= 4:
-		interval *= 0.5  # Тир 4 (4.15): улучшенные генераторы производят электричество вдвое быстрее
-	if _produce_timer >= interval:
-		_produce_timer -= interval
-		var total_capacity := _total_storage_capacity()
-		if InventorySystem.get_resource("electricity") < total_capacity:
-			InventorySystem.add_resource("electricity", electricity_per_tick)
 
-	var powered := InventorySystem.get_resource("electricity") > 0
-	if powered != _was_powered:
-		_was_powered = powered
-		if powered:
-			EventBus.power_restored.emit()
-		else:
-			EventBus.power_lost.emit()
-
-
-## Суммарный лимит запаса электричества по всем живым генераторам.
-func _total_storage_capacity() -> int:
-	var total := 0
-	for g in get_tree().get_nodes_in_group("generator"):
-		total += int(g.get("storage_capacity"))
-	return total
+## Текущая отдаваемая мощность (Этап 4.25). Тир 4 (4.15) добавляет +20.
+func get_power_output() -> int:
+	return power_output + (20 if InventorySystem.shelter_tier >= 4 else 0)
 
 
 func take_damage(amount: float) -> void:
@@ -82,7 +47,6 @@ func is_full_health() -> bool:
 
 
 func _on_died() -> void:
-	EventBus.power_lost.emit()
 	queue_free()
 
 

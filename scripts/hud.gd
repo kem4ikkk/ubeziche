@@ -12,6 +12,7 @@ extends CanvasLayer
 @onready var result_label: Label = $ResultScreen/ResultLabel
 @onready var alert_label: Label = $AlertLabel
 @onready var evac_label: Label = $EvacLabel
+@onready var power_label: Label = $PowerLabel
 
 const ALERT_DURATION := 2.5  ## сколько секунд держим тревожное сообщение (Этап 4.9)
 
@@ -20,14 +21,13 @@ var _game_state_manager: Node
 var _wave_manager: Node
 var _weapon_name: String = "Пистолет"
 var _alert_timer: float = 0.0
+var _power_short: bool = false  ## была ли нехватка питания в прошлый кадр (Этап 4.25)
 
 # Понятные русские названия ресурсов для HUD.
 const RESOURCE_NAMES := {
 	"wood": "Дерево",
 	"steel": "Сталь",
 	"wall": "Стена",
-	"turret_ammo": "Патроны турелей",
-	"electricity": "Электричество",
 }
 
 
@@ -99,6 +99,30 @@ func _process(delta: float) -> void:
 		evac_label.visible = true
 	else:
 		evac_label.visible = false
+
+	_update_power()
+
+
+## Строка питания (Этап 4.25): бюджет мощности генераторов vs потребление
+## турелей. Красным, если нагрузка превышает мощность (часть турелей стоит).
+func _update_power() -> void:
+	var supply := 0
+	for g in get_tree().get_nodes_in_group("generator"):
+		if g.has_method("get_power_output"):
+			supply += g.get_power_output()
+	var demand := 0
+	for t in get_tree().get_nodes_in_group("turret"):
+		demand += int(t.power_cost) if "power_cost" in t else 30
+	power_label.text = "Питание: %d / %d" % [demand, supply]
+	power_label.modulate = Color(1.0, 0.4, 0.4) if demand > supply else Color(1, 1, 1)
+	# Оповещение при появлении/снятии нехватки питания.
+	var short: bool = demand > supply
+	if short != _power_short:
+		_power_short = short
+		if short:
+			_on_power_lost()
+		else:
+			_on_power_restored()
 
 
 func _on_game_over(victory: bool) -> void:

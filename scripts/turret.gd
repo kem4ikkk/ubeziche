@@ -1,21 +1,22 @@
 extends StaticBody3D
 
 ## Турель (Этап 4.8.1): автоматическая оборонительная постройка.
-## Сама наводится на ближайшего зомби в радиусе и стреляет по кулдауну,
-## расходуя общий боезапас турелей (InventorySystem "turret_ammo") —
-## это её «расходник» (Turret Component). Когда боезапас кончился — простаивает.
+## Сама наводится на ближайшего зомби в радиусе и стреляет по кулдауну.
+## Боезапаса нет (убран в 4.25) — турель работает, пока есть питание
+## (электричество от генератора, _has_power); без питания простаивает.
 ## Как и стена, входит в группу "building": зомби могут её разрушить,
-## игрок — отремонтировать (клавиша F).
+## игрок — отремонтировать ударом топора.
 ##
-## Электричество (Этап 4.16): пока турель установлена, она постоянно тратит
-## электричество из общего запаса — раз в electricity_drain_interval секунд
-## расходуется 1 ед., независимо от того, стреляет ли турель в этот момент.
-## Если запас опустел — турель простаивает (см. _has_power в generator.gd).
+## Питание (Этап 4.25, модель мощности): пока турель установлена, она ПОТРЕБЛЯЕТ
+## power_cost мощности (постоянная нагрузка, как ватты — не запас и не за выстрел).
+## Турель работает, если суммарной мощности генераторов хватает на неё с учётом
+## всех турелей по порядку; если бюджет исчерпан — эта турель простаивает,
+## а те, что влезли в бюджет, работают (см. _has_power).
 
 @export var fire_range: float = 12.0      # радиус обнаружения цели, м
 @export var fire_interval: float = 0.8    # пауза между выстрелами, с
 @export var turret_damage: float = 12.0   # урон за выстрел
-@export var electricity_drain_interval: float = 10.0  # секунд на 1 ед. электричества (Этап 4.16)
+@export var power_cost: int = 30          # сколько мощности потребляет (Этап 4.25)
 
 @onready var health: HealthComponent = $HealthComponent
 @onready var hp_label: Label3D = $HPLabel
@@ -23,7 +24,6 @@ extends StaticBody3D
 @onready var power_label: Label3D = $PowerLabel
 
 var _fire_timer: float = 0.0
-var _drain_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -36,8 +36,6 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_drain_electricity(delta)
-
 	power_label.visible = not _has_power()
 	if power_label.visible:
 		return
@@ -58,32 +56,31 @@ func _physics_process(delta: float) -> void:
 		_try_fire(target)
 
 
-## Стреляем по цели, если есть боезапас (расходник). Иначе простаиваем.
+## Стреляем по цели (Этап 4.25: без боезапаса, только при наличии питания —
+## проверка _has_power уже сделана в _physics_process).
 func _try_fire(target: Node3D) -> void:
-	if InventorySystem.get_resource("turret_ammo") <= 0:
-		return
-	InventorySystem.use_resource("turret_ammo", 1)
 	if target.has_method("take_damage"):
 		target.take_damage(turret_damage)
 	print("Турель стреляет (-", turret_damage, " HP)")
 
 
-## Постоянный расход электричества за то, что турель установлена (Этап 4.16).
-func _drain_electricity(delta: float) -> void:
-	_drain_timer += delta
-	if _drain_timer >= electricity_drain_interval:
-		_drain_timer -= electricity_drain_interval
-		if InventorySystem.get_resource("electricity") > 0:
-			InventorySystem.use_resource("electricity", 1)
-
-
-## Есть ли питание (Этап 4.14, ресурс переименован в 4.16): нужен живой
-## генератор (группа "generator") и электричество в общем запасе.
-## Без питания турель не наводится и не стреляет.
+## Есть ли питание (Этап 4.25, модель мощности): суммируем отдачу всех живых
+## генераторов и нарастающую нагрузку турелей по порядку группы "turret".
+## Турель запитана, если суммарная нагрузка вплоть до неё включительно не
+## превышает суммарную мощность; иначе — простаивает (бюджет исчерпан).
 func _has_power() -> bool:
-	if InventorySystem.get_resource("electricity") <= 0:
+	var supply := 0
+	for g in get_tree().get_nodes_in_group("generator"):
+		if g.has_method("get_power_output"):
+			supply += g.get_power_output()
+	if supply <= 0:
 		return false
-	return not get_tree().get_nodes_in_group("generator").is_empty()
+	var used := 0
+	for t in get_tree().get_nodes_in_group("turret"):
+		used += int(t.power_cost) if "power_cost" in t else 30
+		if t == self:
+			break
+	return used <= supply
 
 
 ## Ближайший зомби (группа "enemy") в радиусе действия.

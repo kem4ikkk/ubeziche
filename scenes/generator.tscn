@@ -26,7 +26,6 @@ metallic = 0.5
 collision_layer = 1
 collision_mask = 1
 script = ExtResource("1_generator")
-fuel_consumption_rate = 0.2
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_base")
