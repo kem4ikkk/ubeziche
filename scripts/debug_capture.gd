@@ -700,6 +700,52 @@ func _run_capture(args: PackedStringArray) -> void:
 				print("  удар топором по зомби: цель уничтожена (урон ", player.axe_damage, ")")
 		_dump_state("ПОСЛЕ топора (4.21)")
 
+	# 6.991) Добыча топором (Этап 4.22): узлы дерева/стали бьются топором,
+	# за удар дают gather_level ресурса из запаса; запас кончился — истощены
+	# до дневного регена.
+	var rnode := get_tree().get_first_node_in_group("resource_node")
+	if is_instance_valid(rnode) and rnode.has_method("hit"):
+		print("CLAUDE: проверяю добычу топором (4.22)")
+		get_tree().paused = false
+		rnode.reserve = rnode.max_reserve
+		rnode._set_depleted(false)
+		var rtype: String = rnode.resource_type
+		var before1: int = InventorySystem.get_resource(rtype)
+		InventorySystem.gather_level = 1
+		var got1: int = rnode.hit()
+		print("  удар (навык 1): +", got1, " (", rtype, "), запас ", rnode.reserve, "/", rnode.max_reserve)
+		InventorySystem.gather_level = 3
+		var got3: int = rnode.hit()
+		print("  удар (навык 3): +", got3, ", запас ", rnode.reserve)
+		# Вычерпываем узел до истощения.
+		var safety := 0
+		while rnode.hit() > 0 and safety < 100:
+			safety += 1
+		print("  после вычерпывания: истощён=", rnode._depleted, ", запас ", rnode.reserve, ", hit()=", rnode.hit())
+		# Дневной реген: эмулируем наступление дня.
+		rnode._on_phase_changed(false)
+		print("  после дневного регена: истощён=", rnode._depleted, ", запас ", rnode.reserve)
+		print("  всего добыто ", rtype, ": ", before1, " → ", InventorySystem.get_resource(rtype))
+
+		# Интеграция: swing_axe ловит узел лучом камеры и добывает.
+		var cam := player.get_node_or_null("Camera3D")
+		if player is Node3D and cam != null:
+			rnode.reserve = rnode.max_reserve
+			rnode._set_depleted(false)
+			InventorySystem.gather_level = 2
+			(player as Node3D).global_position = Vector3(20, 1, 20)
+			player.equip_axe()
+			await get_tree().create_timer(0.1).timeout
+			# Ставим узел точно на луч камеры (вперёд по -Z от камеры), чтобы попасть.
+			var cam3d := cam as Node3D
+			(rnode as Node3D).global_position = cam3d.global_position + (-cam3d.global_transform.basis.z) * 1.5
+			await get_tree().create_timer(0.1).timeout
+			var rb: int = InventorySystem.get_resource(rnode.resource_type)
+			player.swing_axe()
+			await get_tree().create_timer(0.1).timeout
+			print("  swing_axe по узлу (навык 2): +", InventorySystem.get_resource(rnode.resource_type) - rb)
+		_dump_state("ПОСЛЕ добычи (4.22)")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")

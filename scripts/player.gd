@@ -204,6 +204,8 @@ func shoot() -> void:
 		var to := from + direction * shoot_range
 		var query := PhysicsRayQueryParameters3D.create(from, to)
 		query.exclude = [get_rid()]   # не попадаем лучом в самого себя
+		# Пули проходят сквозь узлы добычи (Этап 4.22): исключаем их слой (бит 2 = 4).
+		query.collision_mask = 0xFFFFFFFB
 		var result := space_state.intersect_ray(query)
 
 		if result:
@@ -325,6 +327,8 @@ func swing_axe() -> void:
 			var got: int = target.hit()          # добыча (этап 4.22)
 			if got > 0:
 				print("Добыто ресурса: +", got)
+			else:
+				print("CLAUDE: узел истощён — реген на следующий день")
 			return
 		if target.is_in_group("enemy") and target.has_method("take_damage"):
 			target.take_damage(axe_damage)
