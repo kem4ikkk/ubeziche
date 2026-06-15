@@ -9,7 +9,7 @@ extends CharacterBody3D
 ##   Q     — взять топор (Этап 4.21, стартовый инструмент)
 ##   R     — перезарядка оружия
 ##   1-5   — переключить оружие (только купленное; берётся вместо топора)
-##   B     — режим постройки; V — сменить тип; ЛКМ — поставить
+##   B     — меню построек (Этап 4.26): выбрать постройку → ЛКМ ставит; B выходит
 ##   Esc   — отпустить курсор
 ## Топор (Этап 4.21) есть с начала игры: ремонт построек теперь бесплатным
 ## ударом топора (без траты дерева), им же добываем ресурсы (5.2) и бьём зомби.
@@ -113,13 +113,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED  # заново захватываем курсор
 
-	# B — переключить режим постройки.
+	# B — открыть/закрыть меню построек (Этап 4.26). В режиме постройки B
+	# просто выходит из него. Само меню (build_menu.gd) выбирает постройку.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
-		build_system.toggle()
-
-	# V — сменить тип постройки (стена ↔ турель) в режиме стройки (Этап 4.8.1).
-	if event is InputEventKey and event.pressed and event.keycode == KEY_V:
-		build_system.cycle_buildable()
+		if build_system.build_mode:
+			build_system.toggle()
+		else:
+			var menu := get_tree().get_first_node_in_group("build_menu")
+			if is_instance_valid(menu) and menu.has_method("toggle"):
+				menu.toggle()
 
 	# R — перезарядить оружие.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:

@@ -68,6 +68,11 @@ func current_buildable_name() -> String:
 	return _buildables[_current].name
 
 
+## Список доступных построек (имя/сцена/цена/min_tier) — для меню построек (4.26).
+func get_buildables() -> Array[Dictionary]:
+	return _buildables
+
+
 ## Выбрать здание по имени (для тестов / будущего меню постройки).
 func select_buildable(building_name: String) -> bool:
 	for i in _buildables.size():

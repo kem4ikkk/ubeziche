@@ -807,6 +807,26 @@ func _run_capture(args: PackedStringArray) -> void:
 			(player as Node3D).global_position = (market as Node3D).global_position + Vector3(0, 1, 4)
 		_dump_state("ПОСЛЕ чёрного рынка (4.24)")
 
+	# 6.994) Меню построек (Этап 4.26): по B открывается UI со списком построек
+	# (цена + гейт по тиру); выбор постройки входит в режим постройки.
+	var bmenu := get_tree().get_first_node_in_group("build_menu")
+	if is_instance_valid(bmenu) and bmenu.has_method("toggle") \
+			and is_instance_valid(player) and player.has_node("BuildSystem"):
+		print("CLAUDE: проверяю меню построек (4.26)")
+		get_tree().paused = false
+		var bs_m := player.get_node("BuildSystem")
+		if bs_m.build_mode:
+			bs_m.toggle()
+		bmenu.toggle()
+		print("  меню открыто: ", bmenu.visible, ", построек в списке: ", bs_m.get_buildables().size())
+		bmenu._on_pick("Турель")
+		print("  после выбора 'Турель': режим постройки=", bs_m.build_mode,
+				", выбрано=", bs_m.current_buildable_name(), ", меню закрыто=", not bmenu.visible)
+		bmenu.toggle()
+		bmenu._on_exit_build()
+		print("  после выхода: режим постройки=", bs_m.build_mode, ", меню закрыто=", not bmenu.visible)
+		_dump_state("ПОСЛЕ меню построек (4.26)")
+
 	# 6.10) Эвакуация как условие победы (Этап 4.11): после N волн вызывается
 	# транспорт — игрок должен добежать до зоны эвакуации, иначе поражение.
 	var game_state := get_tree().get_first_node_in_group("game_state_manager")
