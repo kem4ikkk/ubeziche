@@ -58,6 +58,24 @@ var engineer_level: int = 0
 # Максимальные уровни веток (стоимость уровня — 1 очко).
 const SKILL_MAX := {"gather": 3, "combat": 3, "engineer": 3}
 
+# Класс игрока (Этап 4.12). Один из "combat"/"gather"/"engineer"; "" — ещё не
+# выбран (на старте забега показываем экран выбора, class_select.gd).
+signal class_changed(player_class: String)
+var player_class: String = ""
+
+# Кросс-доступ к ЧУЖИМ веткам (Этап 4.12): свою качаем до SKILL_MAX, в чужую можно
+# вложить лишь OFF_CLASS_EXTRA уровней СВЕРХ её базы (SKILL_BASE) — «немного из
+# других веток». gather стартует с 1 (это база «+1 ресурс/удар»), combat/engineer — с 0.
+const OFF_CLASS_EXTRA := 1
+const SKILL_BASE := {"gather": 1, "combat": 0, "engineer": 0}
+
+# Сигнатурные способности (Этап 4.12): открываются узлом своей ветки за очко.
+# Эффект подключается в 4.12b (player.gd, клавиша F). Здесь — только состояние.
+var has_airstrike: bool = false   # Боец
+var has_campfire: bool = false    # Добытчик
+var has_c4: bool = false          # Инженер (право крафтить C4)
+var c4_charges: int = 0           # сколько зарядов C4 в наличии (крафт в мастерской)
+
 
 func _ready() -> void:
 	# EventBus загружается после InventorySystem — подписываемся отложенно,
@@ -81,8 +99,15 @@ func add_resource(resource_type: String, amount: int) -> void:
 		inventory[resource_type] = 0
 	inventory[resource_type] += amount
 	if resource_type in CAPPED_RESOURCES:
-		inventory[resource_type] = mini(inventory[resource_type], RESOURCE_CAP)
+		inventory[resource_type] = mini(inventory[resource_type], get_resource_cap())
 	inventory_changed.emit(inventory)
+
+
+## Лимит дерева/стали (Этап 4.12): базовый + бонус Добытчика (+20 за уровень
+## его ветки). У других классов — базовый RESOURCE_CAP.
+func get_resource_cap() -> int:
+	var bonus := 20 * gather_level if player_class == "gather" else 0
+	return RESOURCE_CAP + bonus
 
 
 ## Использовать ресурсы для крафта (возвращает true если достаточно).
@@ -141,8 +166,8 @@ func upgrade_skill(branch: String) -> bool:
 	if skill_points <= 0:
 		print("Навыки: нет свободных очков")
 		return false
-	if get_skill_level(branch) >= SKILL_MAX[branch]:
-		print("Навыки: ветка «", branch, "» уже максимального уровня")
+	if get_skill_level(branch) >= get_skill_cap(branch):
+		print("Навыки: ветка «", branch, "» на потолке (", get_skill_cap(branch), ")")
 		return false
 	skill_points -= 1
 	match branch:
@@ -159,4 +184,69 @@ func upgrade_skill(branch: String) -> bool:
 func add_skill_point(amount: int = 1) -> void:
 	skill_points += amount
 	print("Навыки: +", amount, " очко за пережитую ночь (всего ", skill_points, ")")
+	skills_changed.emit()
+
+
+## Потолок ветки (Этап 4.12): своя ветка — до SKILL_MAX, чужая — до OFF_CLASS_MAX.
+## Пока класс не выбран, все ветки трактуем как «свои» (полный потолок).
+func get_skill_cap(branch: String) -> int:
+	if player_class == "" or branch == player_class:
+		return SKILL_MAX.get(branch, 0)
+	return SKILL_BASE.get(branch, 0) + OFF_CLASS_EXTRA
+
+
+## Выбрать класс игрока (Этап 4.12). Вызывается экраном выбора класса один раз
+## за забег. Меняет идентичность: своя ветка/способность/стат-бонусы.
+func set_class(c: String) -> void:
+	if c not in ["combat", "gather", "engineer"]:
+		return
+	player_class = c
+	print("Класс выбран: ", c)
+	class_changed.emit(player_class)
+	skills_changed.emit()
+
+
+## Открыта ли сигнатурная способность СВОЕГО класса.
+func ability_unlocked() -> bool:
+	match player_class:
+		"combat": return has_airstrike
+		"gather": return has_campfire
+		"engineer": return has_c4
+	return false
+
+
+## Открыть сигнатурную способность своего класса за 1 очко (Этап 4.12).
+## Требует выбранного класса и уровня своей ветки ≥ 1. Возвращает true при успехе.
+func unlock_ability() -> bool:
+	if player_class == "" or ability_unlocked():
+		return false
+	if get_skill_level(player_class) < 1:
+		print("Навыки: сначала вложите очко в свою ветку")
+		return false
+	if skill_points <= 0:
+		print("Навыки: нет свободных очков")
+		return false
+	skill_points -= 1
+	match player_class:
+		"combat": has_airstrike = true
+		"gather": has_campfire = true
+		"engineer": has_c4 = true
+	print("Навыки: открыта сигнатурная способность класса «", player_class, "»")
+	skills_changed.emit()
+	return true
+
+
+## Сбросить прогрессию класса/навыков для нового забега (Этап 4.12). Экран
+## выбора класса вызывает это при старте сцены, чтобы класс выбирался заново
+## (InventorySystem — автозагрузка и переживает reload_current_scene).
+func reset_run_progression() -> void:
+	player_class = ""
+	skill_points = 3
+	gather_level = 1
+	combat_level = 0
+	engineer_level = 0
+	has_airstrike = false
+	has_campfire = false
+	has_c4 = false
+	c4_charges = 0
 	skills_changed.emit()

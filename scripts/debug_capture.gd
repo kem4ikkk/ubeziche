@@ -940,6 +940,55 @@ func _run_capture(args: PackedStringArray) -> void:
 					sm.has_method("_unhandled_input"))
 		_dump_state("ПОСЛЕ навыков (4.23)")
 
+	# 6.9925) Классы и кросс-доступ (Этап 4.12a). Класс задаёт ветку/потолки и
+	# стат-бонусы (+HP бойца, +лимит добытчика, +урон турелей инженера); чужая
+	# ветка качается лишь на +1 сверх базы; сигнатурная способность — только своя.
+	if is_instance_valid(player):
+		print("CLAUDE: проверяю классы (4.12a)")
+		var hc := player.get_node("HealthComponent") as HealthComponent
+		# --- Боец: своя ветка «Бой» до 3, чужая «Добыча» — лишь на +1 сверх базы.
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("combat")
+		print("  класс=", InventorySystem.player_class, " (ожидается combat)")
+		var base_hp: float = hc.max_health
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("combat")
+		InventorySystem.upgrade_skill("combat")
+		InventorySystem.upgrade_skill("combat")
+		var combat_capped: bool = not InventorySystem.upgrade_skill("combat")
+		print("  Бой=", InventorySystem.combat_level, "/3, потолок держит=", combat_capped)
+		print("  макс HP бойца: ", base_hp, " → ", hc.max_health, " (ожидается +45 при Бой 3)")
+		var off1: bool = InventorySystem.upgrade_skill("gather")   # 1 → 2 (база 1 + 1)
+		var off2: bool = InventorySystem.upgrade_skill("gather")   # стоп на потолке
+		print("  чужая «Добыча»: 1-е=", off1, " 2-е=", off2,
+				" (ожидается true/false), ур=", InventorySystem.gather_level,
+				"/", InventorySystem.get_skill_cap("gather"))
+		var ab_combat: bool = InventorySystem.unlock_ability()
+		print("  Боец открыл Авиаудар: ", InventorySystem.has_airstrike,
+				" (unlock=", ab_combat, "); C4=", InventorySystem.has_c4, " (ожидается false)")
+		# --- Добытчик: +лимит ресурсов (40 + 20×ур.; на старте ур.1 → 60).
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("gather")
+		var cap0: int = InventorySystem.get_resource_cap()
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("gather")
+		InventorySystem.upgrade_skill("gather")
+		print("  лимит ресурсов добытчика: ", cap0, " → ", InventorySystem.get_resource_cap(),
+				" (ожидается 60 → 100 при Добыча 1→3)")
+		# --- Инженер: +урон турелей (+10%/ур.) и право на C4.
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("engineer")
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("engineer")
+		InventorySystem.upgrade_skill("engineer")
+		var mult: float = 1.0 + 0.1 * InventorySystem.engineer_level
+		print("  множитель урона турели инженера: x", mult, " (ожидается x1.2 при Инженер 2)")
+		InventorySystem.unlock_ability()
+		print("  Инженер открыл C4: ", InventorySystem.has_c4, " (ожидается true)")
+		# Сброс класса/навыков, чтобы не влиять на последующие секции прогона.
+		InventorySystem.reset_run_progression()
+		_dump_state("ПОСЛЕ классов (4.12a)")
+
 	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
 	# меняет точку каждый день; рядом покупается оружие за деньги (тест покупки —
 	# в секции 4.6 выше через market.buy_weapon).

@@ -61,6 +61,9 @@ var axe_equipped: bool = true             # на старте в руках то
 @export var axe_swing_interval: float = 0.6
 var _swing_timer: float = 0.0
 
+# Базовый максимум HP (из сцены) — к нему добавляется бонус класса Боец (4.12).
+var _base_max_health: float = 100.0
+
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
 @onready var health: HealthComponent = $HealthComponent
@@ -82,6 +85,13 @@ func _ready() -> void:
 	# Записываемся в группу "player" — так враги нас находят.
 	add_to_group("player")
 	health.died.connect(_on_died)
+
+	# Класс Боец (Этап 4.12): +макс HP за уровень ветки «Бой». Базовый максимум
+	# берём из сцены один раз, бонус пересчитываем при смене навыков/класса.
+	_base_max_health = health.max_health
+	InventorySystem.skills_changed.connect(_apply_combat_hp)
+	InventorySystem.class_changed.connect(func(_c): _apply_combat_hp())
+	_apply_combat_hp()
 
 	# Инициализация оружия (Этап 4.6.2): у каждого оружия своя обойма.
 	# Стартует только пистолет (индекс 0), остальное покупается за деньги.
@@ -481,6 +491,20 @@ func take_damage(amount: float) -> void:
 ## Лечение игрока (Этап 4.7.3: покупка лечения в мастерской за деньги).
 func heal(amount: float) -> void:
 	health.heal(amount)
+
+
+## Класс Боец (Этап 4.12): пересчёт макс HP = база + 15 за уровень ветки «Бой»
+## (только если выбран класс «combat»). При росте максимума подлечиваем на дельту.
+func _apply_combat_hp() -> void:
+	if not is_instance_valid(health):
+		return
+	var bonus: float = 15.0 * InventorySystem.combat_level if InventorySystem.player_class == "combat" else 0.0
+	var new_max: float = _base_max_health + bonus
+	var delta: float = new_max - health.max_health
+	health.max_health = new_max
+	if delta > 0.0 and health.current_health > 0.0:
+		health.current_health = minf(health.current_health + delta, new_max)
+	health.health_changed.emit(health.current_health, health.max_health)
 
 
 ## Полное ли здоровье — чтобы мастерская не продавала бесполезное лечение.
