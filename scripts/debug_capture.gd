@@ -776,17 +776,24 @@ func _run_capture(args: PackedStringArray) -> void:
 			get_tree().current_scene.add_child(z)
 			(z as Node3D).global_position = (player as Node3D).global_position + Vector3(0, 0.6, -1.5)
 			await get_tree().create_timer(0.1).timeout
+			# Баланс урона «Бой» (правка 2026-06-16): бонус снижен ×10 → ×4. На бое 0
+			# урон = база (25): зомби 30 HP переживает удар (30→5), дельта читается.
+			InventorySystem.combat_level = 0
 			var zhp0: float = -1.0
 			if z.has_node("HealthComponent"):
 				zhp0 = (z.get_node("HealthComponent") as HealthComponent).current_health
 			player.swing_axe()
 			await get_tree().create_timer(0.1).timeout
 			if is_instance_valid(z) and z.has_node("HealthComponent"):
-				print("  удар топором по зомби: HP ", zhp0, " → ",
+				print("  удар топором по зомби (бой 0): HP ", zhp0, " → ",
 						(z.get_node("HealthComponent") as HealthComponent).current_health,
 						" (урон топора ", player.axe_damage, ")")
 			else:
-				print("  удар топором по зомби: цель уничтожена (урон ", player.axe_damage, ")")
+				print("  удар топором по зомби (бой 0): цель уничтожена (урон ", player.axe_damage, ")")
+			# Новый масштаб «Боя»: ближний урон на максималке (3) = база + 3×4 = 37
+			# (раньше 25 + 3×10 = 55 — топор сносил танка за 2 удара).
+			print("  ближний урон при бое 3 (новый баланс): ", player.axe_damage + 3 * 4.0,
+					" (раньше было ", player.axe_damage + 3 * 10.0, ")")
 		_dump_state("ПОСЛЕ топора (4.21)")
 
 	# 6.991) Добыча топором (правка: HP-удары + случайный спавн). Узел имеет
@@ -807,8 +814,8 @@ func _run_capture(args: PackedStringArray) -> void:
 		InventorySystem.gather_level = 3
 		var got3: int = rnode.hit()
 		print("  удар (навык 3): +", got3, ", осталось ударов ", rnode._hits_remaining)
-		# Вычерпываем узел до конца — он исчезает, спавнер ставит новый
-		# (число узлов на карте сохраняется).
+		# Вычерпываем узел до конца — он ИСЧЕЗАЕТ и НЕ заменяется сразу (правка
+		# 2026-06-16): число узлов на карте НЕ фиксировано, новые «дозревают» позже.
 		var nodes_before: int = get_tree().get_nodes_in_group("resource_node").size()
 		var safety := 0
 		while is_instance_valid(rnode) and not rnode._depleted and safety < 100:
@@ -818,7 +825,17 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(0.2).timeout
 		var nodes_after: int = get_tree().get_nodes_in_group("resource_node").size()
 		print("  узел исчерпан=", was_depleted, "; узлов на карте: было ", nodes_before,
-				" → стало ", nodes_after, " (спавнер заменил исчезнувший)")
+				" → стало ", nodes_after, " (НЕ заменяется сразу — ожидается ", nodes_before - 1, ")")
+		# «Дозрев» нового узла — со временем (случайный момент). Здесь вызываем тик
+		# спавнера вручную (в реальной игре ждём respawn_min..respawn_max сек): под
+		# лимитом он добавит один узел.
+		var spawner := get_tree().get_first_node_in_group("resource_spawner")
+		if is_instance_valid(spawner) and spawner.has_method("_on_respawn_tick"):
+			var before_tick: int = get_tree().get_nodes_in_group("resource_node").size()
+			spawner._on_respawn_tick()
+			await get_tree().create_timer(0.1).timeout
+			print("  тик спавнера (дозрев со временем): узлов ", before_tick,
+					" → ", get_tree().get_nodes_in_group("resource_node").size())
 
 		# Интеграция: swing_axe ловит узел лучом камеры и добывает.
 		var cam := player.get_node_or_null("Camera3D")

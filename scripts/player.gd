@@ -5,7 +5,8 @@ extends CharacterBody3D
 ##   WASD  — движение
 ##   Мышь  — обзор
 ##   Space — прыжок
-##   ЛКМ   — с топором: добыча/ремонт/ближний бой (swing_axe); со стволом: выстрел
+##   ЛКМ   — с топором: добыча/ремонт/ближний бой (swing_axe; можно ЗАЖАТЬ —
+##           непрерывная рубка); со стволом: выстрел
 ##   Q     — взять топор (Этап 4.21, стартовый инструмент)
 ##   R     — перезарядка оружия
 ##   1-5   — переключить оружие (только купленное; берётся вместо топора)
@@ -179,6 +180,16 @@ func _physics_process(delta: float) -> void:
 	# Кулдаун удара топором (Этап 4.27).
 	if _swing_timer > 0.0:
 		_swing_timer -= delta
+
+	# Зажатая ЛКМ с топором — НЕПРЕРЫВНАЯ добыча/ремонт/бой (правка 2026-06-16):
+	# можно зажать кнопку и рубить, темп задаёт кулдаун в swing_axe(). Для стволов
+	# авто-огня нет (стрельба — по одиночному клику в _unhandled_input). Не трогаем
+	# при открытом меню, в режиме постройки и без захвата курсора.
+	if not _capture_mode and axe_equipped \
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and not build_system.build_mode and not _any_menu_open() \
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		swing_axe()
 
 	# Притяжение к земле, пока не на полу.
 	if not is_on_floor():
@@ -377,11 +388,13 @@ func swing_axe() -> void:
 			if got > 0:
 				print("Добыто ресурса: +", got)
 			else:
-				print("CLAUDE: узел истощён — реген на следующий день")
+				print("CLAUDE: узел истощён")
 			return
 		if target.is_in_group("enemy") and target.has_method("take_damage"):
-			# Урон = база + ветка «Бой» (4.23) + Нож (4.27).
-			var dmg := axe_damage + InventorySystem.combat_level * 10.0
+			# Урон = база + ветка «Бой» + Нож. Бонус «Боя» снижен с ×10 до ×4
+			# (правка 2026-06-16): на ×10 ближний бой стал слишком сильным —
+			# на бое 3 топор сносил обычного зомби с одного удара, танка за два.
+			var dmg := axe_damage + InventorySystem.combat_level * 4.0
 			if InventorySystem.has_knife:
 				dmg += 10.0
 			target.take_damage(dmg)
