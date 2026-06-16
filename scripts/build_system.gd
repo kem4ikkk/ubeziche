@@ -18,6 +18,7 @@ const MAX_GENERATORS := 4  # лимит ставимых генераторов 
 @export var gatling_scene: PackedScene
 @export var generator_scene: PackedScene
 @export var workshop_scene: PackedScene
+@export var campfire_scene: PackedScene
 
 var build_mode: bool = false
 var _ghost: Node3D
@@ -35,6 +36,7 @@ func _ready() -> void:
 		{"name": "Генератор", "scene": generator_scene, "cost": {"steel": 10, "wood": 5}, "min_tier": 1},
 		{"name": "Турель", "scene": turret_scene, "cost": {"steel": 3, "wood": 2}, "min_tier": 1},
 		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "steel": 3}, "min_tier": 1},
+		{"name": "Костёр", "scene": campfire_scene, "cost": {"wood": 5}, "min_tier": 1},
 		{"name": "Мортира", "scene": mortar_scene, "cost": {"steel": 8, "wood": 4}, "min_tier": 2},
 		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"steel": 12, "wood": 6}, "min_tier": 3},
 	]

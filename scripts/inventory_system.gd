@@ -59,7 +59,7 @@ var engineer_level: int = 0
 const SKILL_MAX := {"gather": 3, "combat": 3, "engineer": 3}
 
 # Класс игрока (Этап 4.12). Один из "combat"/"gather"/"engineer"; "" — ещё не
-# выбран (на старте забега показываем экран выбора, class_select.gd).
+# выбран (класс выбирается в меню навыков N / skill_menu; стартового попапа нет, 4.12c).
 signal class_changed(player_class: String)
 var player_class: String = ""
 
@@ -72,7 +72,7 @@ const SKILL_BASE := {"gather": 1, "combat": 0, "engineer": 0}
 # Сигнатурные способности (Этап 4.12): открываются узлом своей ветки за очко.
 # Эффект подключается в 4.12b (player.gd, клавиша F). Здесь — только состояние.
 var has_airstrike: bool = false   # Боец
-var has_campfire: bool = false    # Добытчик
+var has_sprint: bool = false      # Добытчик (Ускорение, Этап 4.12c — вместо Костра)
 var has_c4: bool = false          # Инженер (право крафтить C4)
 var c4_charges: int = 0           # сколько зарядов C4 в наличии (крафт в мастерской)
 
@@ -210,7 +210,7 @@ func set_class(c: String) -> void:
 func ability_unlocked() -> bool:
 	match player_class:
 		"combat": return has_airstrike
-		"gather": return has_campfire
+		"gather": return has_sprint
 		"engineer": return has_c4
 	return false
 
@@ -229,7 +229,7 @@ func unlock_ability() -> bool:
 	skill_points -= 1
 	match player_class:
 		"combat": has_airstrike = true
-		"gather": has_campfire = true
+		"gather": has_sprint = true
 		"engineer": has_c4 = true
 	print("Навыки: открыта сигнатурная способность класса «", player_class, "»")
 	skills_changed.emit()
@@ -246,7 +246,7 @@ func reset_run_progression() -> void:
 	combat_level = 0
 	engineer_level = 0
 	has_airstrike = false
-	has_campfire = false
+	has_sprint = false
 	has_c4 = false
 	c4_charges = 0
 	skills_changed.emit()

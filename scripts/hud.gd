@@ -144,7 +144,13 @@ func _update_ability() -> void:
 			var cd: float = p._airstrike_cd if is_instance_valid(p) and "_airstrike_cd" in p else 0.0
 			ability_label.text = "Авиаудар (F): %s" % ("готов" if cd <= 0.0 else "%d c" % ceili(cd))
 		"gather":
-			ability_label.text = "Костёр (F)"
+			var pg := get_tree().get_first_node_in_group("player")
+			var scd: float = pg._sprint_cd if is_instance_valid(pg) and "_sprint_cd" in pg else 0.0
+			var st: float = pg._sprint_timer if is_instance_valid(pg) and "_sprint_timer" in pg else 0.0
+			if st > 0.0:
+				ability_label.text = "Ускорение (F): активно"
+			else:
+				ability_label.text = "Ускорение (F): %s" % ("готов" if scd <= 0.0 else "%d c" % ceili(scd))
 		"engineer":
 			ability_label.text = "C4 (F): %d" % InventorySystem.c4_charges
 

@@ -12,14 +12,15 @@ const BRANCHES := [
 	{"key": "engineer", "name": "Инженер", "desc": "+HP ремонта, +урон турелей"},
 ]
 
-# Сигнатурная способность по классу (Этап 4.12).
-const ABILITY_BY_CLASS := {"combat": "Авиаудар", "gather": "Костёр", "engineer": "C4"}
+# Сигнатурная способность по классу (Этап 4.12; Добыча: Ускорение с 4.12c).
+const ABILITY_BY_CLASS := {"combat": "Авиаудар", "gather": "Ускорение", "engineer": "C4"}
 const CLASS_NAMES := {"combat": "Боец", "gather": "Добытчик", "engineer": "Инженер", "": "не выбран"}
 
 @onready var _points_label: Label = $Panel/VBox/PointsLabel
 @onready var _rows_box: VBoxContainer = $Panel/VBox/Rows
 
 var _rows: Array = []
+var _class_btns: Array = []
 var _ability_label: Label
 var _ability_btn: Button
 var _capture_mode := false
@@ -30,6 +31,10 @@ func _ready() -> void:
 	_capture_mode = OS.get_cmdline_user_args().has("--capture")
 	# Меню работает всегда (паузы в игре нет, Этап 4.31).
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Новый забег: сбрасываем класс/навыки (раньше это делал стартовый попап,
+	# убран в 4.12c — класс выбирается здесь, в меню N). В capture не трогаем.
+	if not _capture_mode:
+		InventorySystem.reset_run_progression()
 	_build_rows()
 	InventorySystem.skills_changed.connect(_refresh)
 	InventorySystem.class_changed.connect(func(_c): _refresh())
@@ -38,6 +43,20 @@ func _ready() -> void:
 
 
 func _build_rows() -> void:
+	# Выбор класса в меню N (Этап 4.12c: стартовый попап убран). Доступно, пока
+	# класс не выбран; выбор фиксируется на забег.
+	var class_row := HBoxContainer.new()
+	var pick_label := Label.new()
+	pick_label.text = "Выбрать класс:"
+	class_row.add_child(pick_label)
+	for c in [["combat", "Боец"], ["gather", "Добытчик"], ["engineer", "Инженер"]]:
+		var cb := Button.new()
+		cb.text = c[1]
+		cb.pressed.connect(func() -> void: InventorySystem.set_class(c[0]))
+		class_row.add_child(cb)
+		_class_btns.append({"key": c[0], "btn": cb})
+	_rows_box.add_child(class_row)
+
 	for branch in BRANCHES:
 		var row := HBoxContainer.new()
 		var label := Label.new()
@@ -72,6 +91,10 @@ func _on_unlock_ability() -> void:
 func _refresh() -> void:
 	var cls: String = InventorySystem.player_class
 	_points_label.text = "Класс: %s    Свободные очки: %d" % [CLASS_NAMES.get(cls, cls), InventorySystem.skill_points]
+	# Кнопки выбора класса активны, пока класс не выбран; выбранный — отмечен.
+	for cbi in _class_btns:
+		cbi.btn.disabled = cls != ""
+		cbi.btn.text = ("✓ " if cbi.key == cls else "") + CLASS_NAMES.get(cbi.key, cbi.key)
 	for r in _rows:
 		var key: String = r.branch.key
 		var lvl: int = InventorySystem.get_skill_level(key)

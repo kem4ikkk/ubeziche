@@ -1018,18 +1018,21 @@ func _run_capture(args: PackedStringArray) -> void:
 				" (урон ", player.airstrike_damage, ")")
 		player._call_airstrike()
 		print("  Авиаудар кулдаун после вызова: ", player._airstrike_cd > 0.0, " (ожидается true)")
-		# --- Костёр (Добытчик): лечит игрока рядом.
+		# --- Ускорение (Добытчик, 4.12c): +25% скорости на время.
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("gather")
 		InventorySystem.unlock_ability()
-		player.heal(1000.0)
-		player.take_damage(40.0)
-		var php0: float = player.get_health()
-		player._place_campfire()
-		await get_tree().create_timer(0.6).timeout
-		print("  Костёр: HP игрока ", php0, " → ", player.get_health(), " (должно вырасти)")
-		for c in get_tree().get_nodes_in_group("campfire"):
-			c.queue_free()
+		player._sprint()
+		print("  Ускорение: активно=", player._sprint_timer > 0.0, ", кулдаун=", player._sprint_cd > 0.0,
+				", множитель=", player.sprint_multiplier, " (ожидается true/true/1.25)")
+		# Костёр теперь ПОСТРОЙКА (B): должен быть в списке построек.
+		var bs_c := player.get_node_or_null("BuildSystem")
+		var camp_buildable := false
+		if bs_c != null:
+			for b in bs_c.get_buildables():
+				if b.name == "Костёр":
+					camp_buildable = true
+		print("  Костёр в меню построек: ", camp_buildable, " (ожидается true)")
 		# --- C4 (Инженер): крафт заряда + взрыв (зомби + снос blastable, базу не трогает).
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("engineer")

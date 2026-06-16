@@ -71,8 +71,13 @@ var _base_max_health: float = 100.0
 @export var airstrike_damage: float = 80.0
 @export var airstrike_cooldown: float = 25.0
 var _airstrike_cd: float = 0.0
-# Сцены, которые ставит игрок: костёр (Добытчик) и заряд C4 (Инженер).
-@export var campfire_scene: PackedScene
+# Ускорение (Добытчик, Этап 4.12c): +25% скорости на время, затем кулдаун.
+@export var sprint_multiplier: float = 1.25
+@export var sprint_duration: float = 5.0
+@export var sprint_cooldown: float = 12.0
+var _sprint_timer: float = 0.0
+var _sprint_cd: float = 0.0
+# Заряд C4 (Инженер) — сцена, которую ставит игрок (Костёр стал постройкой B).
 @export var c4_scene: PackedScene
 @export var c4_place_range: float = 8.0   # на какую дальность по прицелу кладём C4
 
@@ -211,6 +216,12 @@ func _physics_process(delta: float) -> void:
 	if _airstrike_cd > 0.0:
 		_airstrike_cd -= delta
 
+	# Таймеры ускорения Добытчика (Этап 4.12c).
+	if _sprint_timer > 0.0:
+		_sprint_timer -= delta
+	if _sprint_cd > 0.0:
+		_sprint_cd -= delta
+
 	# Зажатая ЛКМ с топором — НЕПРЕРЫВНАЯ добыча/ремонт/бой (правка 2026-06-16):
 	# можно зажать кнопку и рубить, темп задаёт кулдаун в swing_axe(). Для стволов
 	# авто-огня нет (стрельба — по одиночному клику в _unhandled_input). Не трогаем
@@ -245,13 +256,15 @@ func _physics_process(delta: float) -> void:
 	# Переводим направление в мировые координаты (с учётом поворота тела).
 	var direction := (transform.basis * input_dir).normalized()
 
+	# Эффективная скорость с учётом ускорения Добытчика (Этап 4.12c).
+	var cur_speed := speed * (sprint_multiplier if _sprint_timer > 0.0 else 1.0)
 	if direction != Vector3.ZERO:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
+		velocity.x = direction.x * cur_speed
+		velocity.z = direction.z * cur_speed
 	else:
 		# Плавно останавливаемся, когда клавиши отпущены.
-		velocity.x = move_toward(velocity.x, 0.0, speed)
-		velocity.z = move_toward(velocity.z, 0.0, speed)
+		velocity.x = move_toward(velocity.x, 0.0, cur_speed)
+		velocity.z = move_toward(velocity.z, 0.0, cur_speed)
 
 	# Встроенная функция: двигает тело и обрабатывает столкновения.
 	move_and_slide()
@@ -515,15 +528,15 @@ func heal(amount: float) -> void:
 
 ## Сигнатурная способность класса (Этап 4.12b), клавиша F. Ветвится по классу и
 ## наличию открытой способности (InventorySystem). В capture-режиме F не читается —
-## тест дёргает _call_airstrike/_place_campfire/_place_c4 напрямую.
+## тест дёргает _call_airstrike/_sprint/_place_c4 напрямую.
 func use_class_ability() -> void:
 	match InventorySystem.player_class:
 		"combat":
 			if InventorySystem.has_airstrike:
 				_call_airstrike()
 		"gather":
-			if InventorySystem.has_campfire:
-				_place_campfire()
+			if InventorySystem.has_sprint:
+				_sprint()
 		"engineer":
 			if InventorySystem.has_c4:
 				_place_c4()
@@ -553,16 +566,15 @@ func _resolve_airstrike(target: Vector3) -> void:
 	print("Авиаудар: попал по ", hits, " врагам (радиус ", airstrike_radius, ", урон ", airstrike_damage, ")")
 
 
-## Костёр (Добытчик): ставит один костёр у игрока (новый заменяет старый).
-func _place_campfire() -> void:
-	if campfire_scene == null:
+## Ускорение (Добытчик, Этап 4.12c): +sprint_multiplier к скорости на sprint_duration
+## секунд, затем кулдаун. Эффект применяется в _physics_process (cur_speed).
+func _sprint() -> void:
+	if _sprint_cd > 0.0:
+		print("CLAUDE: ускорение на кулдауне (", ceili(_sprint_cd), " c)")
 		return
-	for c in get_tree().get_nodes_in_group("campfire"):
-		c.queue_free()
-	var fire := campfire_scene.instantiate()
-	get_tree().current_scene.add_child(fire)
-	(fire as Node3D).global_position = global_position
-	print("Костёр поставлен")
+	_sprint_timer = sprint_duration
+	_sprint_cd = sprint_cooldown
+	print("Ускорение активно (+", int((sprint_multiplier - 1.0) * 100.0), "% скорости на ", sprint_duration, " c)")
 
 
 ## C4 (Инженер): тратит заряд, ставит C4 в точку прицела (взрыв через таймер в c4.gd).
