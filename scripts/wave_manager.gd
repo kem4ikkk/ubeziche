@@ -28,6 +28,15 @@ signal wave_cleared(wave_number: int)
 @export var juggernaut_scene: PackedScene
 @export var juggernaut_starting_wave: int = 3  # с какой ночи приходит мини-босс
 
+# Спецволны и спецзомби (Этап 4.13b).
+@export var boss_scene: PackedScene            # босс «Колосс» — в босс-ночи
+@export var screamer_scene: PackedScene        # Крикун (4.13a)
+@export var exploder_scene: PackedScene        # Взрывной (4.13a)
+@export var boss_every: int = 5                # каждая N-я ночь — босс-ночь
+@export var horde_every: int = 3               # каждая N-я (не босс) — орда (×2 зомби)
+@export var special_zombie_start_wave: int = 4 # с какой ночи подмешиваются спецзомби
+@export var special_zombie_chance: float = 0.3 # шанс, что обычный зомби заменён спецом
+
 var current_wave: int = 0
 var _zombies_alive: int = 0
 var _spawning: bool = false
@@ -46,6 +55,11 @@ func start_wave() -> void:
 		return
 	current_wave += 1
 	wave_started.emit(current_wave)
+
+	# Тип ночи (Этап 4.13b): босс-ночь важнее орды (каждые boss_every — босс).
+	var is_boss := boss_scene != null and current_wave % boss_every == 0
+	var is_horde := not is_boss and current_wave % horde_every == 0
+
 	var count := first_wave_count + (current_wave - 1) * count_increment
 	var tank_count := 0
 	if tank_zombie_scene != null and current_wave >= tank_starting_wave:
@@ -56,10 +70,23 @@ func start_wave() -> void:
 		juggernaut_count = 1
 	# Этап 4.5.1: с каждой следующей ночью зомби появляются чаще.
 	var interval: float = maxf(min_spawn_interval, spawn_interval - (current_wave - 1) * spawn_interval_decrease)
-	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count, ", джаггернаутов: ", juggernaut_count, ", интервал спавна: ", interval)
+
+	# Спецволны (Этап 4.13b): орда — больше зомби и быстрее; босс-ночь — меньше
+	# рядовых, но приходит босс. HUD объявляет тип ночи.
+	if is_horde:
+		count *= 2
+		interval = maxf(min_spawn_interval, interval * 0.6)
+		EventBus.special_wave.emit("Орда зомби!")
+	elif is_boss:
+		count = maxi(2, count / 2)
+		EventBus.special_wave.emit("Босс-ночь: Колосс")
+
+	print("Волна ", current_wave, " — зомби: ", count, ", танков: ", tank_count,
+			", джаггернаутов: ", juggernaut_count, ", босс: ", is_boss, ", орда: ", is_horde,
+			", интервал спавна: ", interval)
 	_spawning = true
 	for i in count:
-		_spawn_zombie(zombie_scene)
+		_spawn_zombie(_pick_normal_scene())
 		await get_tree().create_timer(interval).timeout
 	for i in tank_count:
 		_spawn_zombie(tank_zombie_scene)
@@ -67,10 +94,26 @@ func start_wave() -> void:
 	for i in juggernaut_count:
 		_spawn_zombie(juggernaut_scene)
 		await get_tree().create_timer(interval).timeout
+	if is_boss:
+		_spawn_zombie(boss_scene)
 	_spawning = false
 	# Если игрок успел перебить всех ещё во время спавна.
 	if _zombies_alive <= 0:
 		_on_wave_cleared()
+
+
+## Какую сцену рядового зомби спавнить (Этап 4.13b): с special_zombie_start_wave
+## с шансом special_zombie_chance подмешиваем спецзомби (Крикун/Взрывной).
+func _pick_normal_scene() -> PackedScene:
+	if current_wave >= special_zombie_start_wave and randf() < special_zombie_chance:
+		var pool: Array[PackedScene] = []
+		if screamer_scene != null:
+			pool.append(screamer_scene)
+		if exploder_scene != null:
+			pool.append(exploder_scene)
+		if not pool.is_empty():
+			return pool[randi() % pool.size()]
+	return zombie_scene
 
 
 ## Доспавнить n обычных зомби в случайных точках спавна (Этап 4.13a: зов Крикуна).

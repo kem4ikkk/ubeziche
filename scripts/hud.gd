@@ -59,6 +59,9 @@ func _ready() -> void:
 	EventBus.power_lost.connect(_on_power_lost)
 	EventBus.power_restored.connect(_on_power_restored)
 	EventBus.screamer_called.connect(_on_screamer_called)
+	EventBus.special_wave.connect(_on_special_wave)
+	EventBus.boss_spawned.connect(_on_boss_spawned)
+	EventBus.boss_defeated.connect(_on_boss_defeated)
 
 	InventorySystem.tier_changed.connect(_on_tier_changed)
 	tier_label.text = "Тир убежища: %d" % InventorySystem.shelter_tier
@@ -211,6 +214,20 @@ func _on_juggernaut_defeated() -> void:
 ## Крикун позвал подмогу (Этап 4.13a).
 func _on_screamer_called() -> void:
 	_show_alert("⚠ Крикун зовёт орду!", Color(1.0, 0.85, 0.2))
+
+
+## Спецволна (Этап 4.13b): объявление типа ночи.
+func _on_special_wave(label: String) -> void:
+	_show_alert("⚠ %s" % label, Color(1.0, 0.5, 0.2))
+
+
+## Босс (Этап 4.13b): появление и гибель.
+func _on_boss_spawned(boss_name: String, _max_hp: float) -> void:
+	_show_alert("☠ БОСС: %s!" % boss_name, Color(1.0, 0.3, 0.3))
+
+
+func _on_boss_defeated() -> void:
+	_show_alert("Босс повержен!", Color(0.4, 1.0, 0.4))
 
 
 ## Финальная фаза эвакуации (Этап 4.11).

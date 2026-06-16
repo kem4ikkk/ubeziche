@@ -1117,6 +1117,63 @@ func _run_capture(args: PackedStringArray) -> void:
 			e.queue_free()
 		_dump_state("ПОСЛЕ спецзомби (4.13a)")
 
+	# 6.9928) Босс «Колосс» + спецволны (Этап 4.13b): босс-ночь спавнит босса с
+	# HP-баром; слэм бьёт по площади (игрок + постройки); гибель скрывает бар.
+	if is_instance_valid(player) and player is Node3D:
+		print("CLAUDE: проверяю босса и спецволны (4.13b)")
+		var wm2 := get_tree().get_first_node_in_group("wave_manager")
+		var hc4 := player.get_node("HealthComponent") as HealthComponent
+		var sw := [""]
+		EventBus.special_wave.connect(func(l): sw[0] = l)
+		var boss_seen := [false]
+		EventBus.boss_spawned.connect(func(_n, _m): boss_seen[0] = true)
+		# Чистим врагов и форсируем босс-ночь с быстрым спавном.
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		await get_tree().create_timer(0.1).timeout
+		if is_instance_valid(wm2):
+			wm2._zombies_alive = 0
+			wm2._spawning = false
+			wm2.spawn_interval = 0.02
+			wm2.min_spawn_interval = 0.02
+			wm2.current_wave = wm2.boss_every - 1
+			wm2.start_wave()
+			await get_tree().create_timer(0.8).timeout
+		var bosses := get_tree().get_nodes_in_group("boss")
+		var bar := get_tree().get_first_node_in_group("boss_bar")
+		print("  босс-ночь: метка='", sw[0], "', боссов: ", bosses.size(),
+				", boss_spawned=", boss_seen[0], ", HP-бар виден=",
+				(bar.visible if is_instance_valid(bar) else false), " (ожидается ≥1/true/true)")
+		if not bosses.is_empty():
+			var boss := bosses[0]
+			hc4.current_health = hc4.max_health
+			var bpos := Vector3(-22, 1, -22)
+			(player as Node3D).global_position = bpos
+			(boss as Node3D).global_position = bpos + Vector3(2, 0, 0)
+			var wsc4: PackedScene = load("res://scenes/wall.tscn")
+			var bwall := wsc4.instantiate()
+			get_tree().current_scene.add_child(bwall)
+			(bwall as Node3D).global_position = bpos + Vector3(2.5, 0, 0)
+			await get_tree().create_timer(0.1).timeout
+			var bp0: float = player.get_health()
+			var bw0: float = (bwall.get_node("HealthComponent") as HealthComponent).current_health
+			boss._do_slam()
+			await get_tree().create_timer(float(boss.slam_telegraph) + 0.2).timeout
+			var bw1: float = (bwall.get_node("HealthComponent") as HealthComponent).current_health if is_instance_valid(bwall) else -1.0
+			print("  слэм босса: HP игрока ", bp0, " → ", player.get_health(),
+					"; HP стены ", bw0, " → ", bw1, " (должны убавиться)")
+			if is_instance_valid(bwall):
+				bwall.queue_free()
+			var boss_dead := [false]
+			EventBus.boss_defeated.connect(func(): boss_dead[0] = true)
+			(boss.get_node("HealthComponent") as HealthComponent).take_damage(100000.0)
+			await get_tree().create_timer(0.2).timeout
+			print("  босс повержен: boss_defeated=", boss_dead[0], ", HP-бар скрыт=",
+					(not bar.visible if is_instance_valid(bar) else true), " (ожидается true/true)")
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		_dump_state("ПОСЛЕ босса и спецволн (4.13b)")
+
 	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
 	# меняет точку каждый день; рядом покупается оружие за деньги (тест покупки —
 	# в секции 4.6 выше через market.buy_weapon).
