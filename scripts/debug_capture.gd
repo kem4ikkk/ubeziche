@@ -1071,6 +1071,52 @@ func _run_capture(args: PackedStringArray) -> void:
 		InventorySystem.reset_run_progression()
 		_dump_state("ПОСЛЕ способностей (4.12b)")
 
+	# 6.9927) Спецзомби (Этап 4.13a): Крикун (зовёт подмогу — доспавн) и
+	# Взрывной (AoE урон по игроку и постройкам при смерти).
+	if is_instance_valid(player) and player is Node3D:
+		print("CLAUDE: проверяю спецзомби (4.13a)")
+		var hc3 := player.get_node("HealthComponent") as HealthComponent
+		hc3.current_health = hc3.max_health
+		# --- Крикун: при обнаружении игрока доспавнивает группу зомби.
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		await get_tree().create_timer(0.1).timeout
+		var scr_sc: PackedScene = load("res://scenes/screamer.tscn")
+		var scr := scr_sc.instantiate()
+		get_tree().current_scene.add_child(scr)
+		(scr as Node3D).global_position = (player as Node3D).global_position + Vector3(2, 0, 0)
+		await get_tree().create_timer(0.4).timeout
+		print("  Крикун кричал=", scr._screamed, ", зомби в группе enemy: ",
+				get_tree().get_nodes_in_group("enemy").size(),
+				" (ожидается ≥ ", 1 + scr.summon_count, ")")
+		# --- Взрывной: AoE при смерти по игроку и постройке рядом.
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		await get_tree().create_timer(0.1).timeout
+		hc3.current_health = hc3.max_health
+		var epos := (player as Node3D).global_position
+		var exp_sc: PackedScene = load("res://scenes/exploder.tscn")
+		var expl := exp_sc.instantiate()
+		get_tree().current_scene.add_child(expl)
+		(expl as Node3D).global_position = epos + Vector3(1.5, 0, 0)
+		var wallsc3: PackedScene = load("res://scenes/wall.tscn")
+		var ewall := wallsc3.instantiate()
+		get_tree().current_scene.add_child(ewall)
+		(ewall as Node3D).global_position = epos + Vector3(2.0, 0, 0)
+		await get_tree().create_timer(0.1).timeout
+		var ephp0: float = player.get_health()
+		var ewhp0: float = (ewall.get_node("HealthComponent") as HealthComponent).current_health
+		(expl.get_node("HealthComponent") as HealthComponent).take_damage(1000.0)
+		await get_tree().create_timer(0.2).timeout
+		var ewhp1: float = (ewall.get_node("HealthComponent") as HealthComponent).current_health if is_instance_valid(ewall) else -1.0
+		print("  Взрывной AoE при смерти: HP игрока ", ephp0, " → ", player.get_health(),
+				"; HP стены ", ewhp0, " → ", ewhp1, " (должны убавиться)")
+		if is_instance_valid(ewall):
+			ewall.queue_free()
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		_dump_state("ПОСЛЕ спецзомби (4.13a)")
+
 	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
 	# меняет точку каждый день; рядом покупается оружие за деньги (тест покупки —
 	# в секции 4.6 выше через market.buy_weapon).

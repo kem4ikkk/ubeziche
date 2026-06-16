@@ -73,6 +73,16 @@ func start_wave() -> void:
 		_on_wave_cleared()
 
 
+## Доспавнить n обычных зомби в случайных точках спавна (Этап 4.13a: зов Крикуна).
+## Учитываются в счётчике волны, как обычные зомби.
+func summon_extra(n: int) -> void:
+	if zombie_scene == null:
+		return
+	for i in n:
+		_spawn_zombie(zombie_scene)
+	print("Крикун: доспавнено зомби: ", n)
+
+
 func _spawn_zombie(scene: PackedScene) -> void:
 	if scene == null or _spawn_points.is_empty():
 		return

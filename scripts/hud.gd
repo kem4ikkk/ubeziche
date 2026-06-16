@@ -58,6 +58,7 @@ func _ready() -> void:
 	EventBus.evacuation_started.connect(_on_evacuation_started)
 	EventBus.power_lost.connect(_on_power_lost)
 	EventBus.power_restored.connect(_on_power_restored)
+	EventBus.screamer_called.connect(_on_screamer_called)
 
 	InventorySystem.tier_changed.connect(_on_tier_changed)
 	tier_label.text = "Тир убежища: %d" % InventorySystem.shelter_tier
@@ -205,6 +206,11 @@ func _on_juggernaut_spawned() -> void:
 
 func _on_juggernaut_defeated() -> void:
 	_show_alert("Джаггернаут повержен!", Color(0.4, 1.0, 0.4))
+
+
+## Крикун позвал подмогу (Этап 4.13a).
+func _on_screamer_called() -> void:
+	_show_alert("⚠ Крикун зовёт орду!", Color(1.0, 0.85, 0.2))
 
 
 ## Финальная фаза эвакуации (Этап 4.11).

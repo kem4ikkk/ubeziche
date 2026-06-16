@@ -24,3 +24,14 @@ signal power_restored()
 ## Пережита ночь (Этап 4.23): цикл день/ночь шлёт это при переходе ночь→день.
 ## InventorySystem ловит и начисляет очко навыка (3 на старте, +1 за ночь).
 signal night_survived()
+
+## Крикун позвал подмогу (Этап 4.13a): HUD показывает предупреждение.
+signal screamer_called()
+
+## Босс (Этап 4.13b): спавн/изменение HP/гибель — для HP-бара и алертов HUD.
+signal boss_spawned(boss_name: String, max_hp: float)
+signal boss_health_changed(hp: float, max_hp: float)
+signal boss_defeated()
+
+## Спецволна (Этап 4.13b): объявление типа ночи (босс-ночь/орда) в HUD.
+signal special_wave(label: String)
