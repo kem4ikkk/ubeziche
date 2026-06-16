@@ -607,12 +607,12 @@ func _aim_ground_point(max_dist: float) -> Vector3:
 	return to
 
 
-## Класс Боец (Этап 4.12): пересчёт макс HP = база + 15 за уровень ветки «Бой»
-## (только если выбран класс «combat»). При росте максимума подлечиваем на дельту.
+## Макс HP = база + 15 за уровень ветки «Бой» (правка 2026-06-17: по уровню ветки,
+## не по классу). При росте максимума подлечиваем на дельту.
 func _apply_combat_hp() -> void:
 	if not is_instance_valid(health):
 		return
-	var bonus: float = 15.0 * InventorySystem.combat_level if InventorySystem.player_class == "combat" else 0.0
+	var bonus: float = 15.0 * InventorySystem.combat_level
 	var new_max: float = _base_max_health + bonus
 	var delta: float = new_max - health.max_health
 	health.max_health = new_max

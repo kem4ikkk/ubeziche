@@ -958,11 +958,11 @@ func _run_capture(args: PackedStringArray) -> void:
 		var combat_capped: bool = not InventorySystem.upgrade_skill("combat")
 		print("  Бой=", InventorySystem.combat_level, "/3, потолок держит=", combat_capped)
 		print("  макс HP бойца: ", base_hp, " → ", hc.max_health, " (ожидается +45 при Бой 3)")
-		var off1: bool = InventorySystem.upgrade_skill("gather")   # 1 → 2 (база 1 + 1)
-		var off2: bool = InventorySystem.upgrade_skill("gather")   # стоп на потолке
-		print("  чужая «Добыча»: 1-е=", off1, " 2-е=", off2,
-				" (ожидается true/false), ур=", InventorySystem.gather_level,
-				"/", InventorySystem.get_skill_cap("gather"))
+		# Любая ветка теперь до 3 независимо от класса (правка 2026-06-17).
+		InventorySystem.upgrade_skill("gather")
+		InventorySystem.upgrade_skill("gather")
+		print("  другая ветка «Добыча» до потолка: ур=", InventorySystem.gather_level,
+				"/", InventorySystem.get_skill_cap("gather"), " (ожидается 3/3)")
 		var ab_combat: bool = InventorySystem.unlock_ability()
 		print("  Боец открыл Авиаудар: ", InventorySystem.has_airstrike,
 				" (unlock=", ab_combat, "); C4=", InventorySystem.has_c4, " (ожидается false)")

@@ -58,12 +58,11 @@ func _physics_process(delta: float) -> void:
 
 ## Стреляем по цели (Этап 4.25: без боезапаса, только при наличии питания —
 ## проверка _has_power уже сделана в _physics_process).
-## Урон множится бонусом класса Инженер (Этап 4.12: +10% за уровень его ветки,
-## аналог Turret Component из оригинала). Игрок один → читаем глобальный навык.
+## Урон множится бонусом ветки «Инженер» (+10% за уровень; правка 2026-06-17 — по
+## уровню ветки, не по классу). Аналог Turret Component из оригинала.
 func _try_fire(target: Node3D) -> void:
 	var dmg := turret_damage
-	if InventorySystem.player_class == "engineer":
-		dmg *= 1.0 + 0.1 * InventorySystem.engineer_level
+	dmg *= 1.0 + 0.1 * InventorySystem.engineer_level
 	if target.has_method("take_damage"):
 		target.take_damage(dmg)
 	print("Турель стреляет (-", dmg, " HP)")

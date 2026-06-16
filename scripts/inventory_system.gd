@@ -63,11 +63,10 @@ const SKILL_MAX := {"gather": 3, "combat": 3, "engineer": 3}
 signal class_changed(player_class: String)
 var player_class: String = ""
 
-# Кросс-доступ к ЧУЖИМ веткам (Этап 4.12): свою качаем до SKILL_MAX, в чужую можно
-# вложить лишь OFF_CLASS_EXTRA уровней СВЕРХ её базы (SKILL_BASE) — «немного из
-# других веток». gather стартует с 1 (это база «+1 ресурс/удар»), combat/engineer — с 0.
-const OFF_CLASS_EXTRA := 1
-const SKILL_BASE := {"gather": 1, "combat": 0, "engineer": 0}
+# Прокачка веток (правка 2026-06-17): ВСЕ ветки качаются до SKILL_MAX (3)
+# независимо от класса (раньше чужие были ограничены — автор попросил доводить
+# любую ветку до 3). Класс теперь определяет ТОЛЬКО сигнатурную способность F
+# (unlock_ability). Стат-бонусы веток применяются по уровню ветки, не по классу.
 
 # Сигнатурные способности (Этап 4.12): открываются узлом своей ветки за очко.
 # Эффект подключается в 4.12b (player.gd, клавиша F). Здесь — только состояние.
@@ -103,11 +102,10 @@ func add_resource(resource_type: String, amount: int) -> void:
 	inventory_changed.emit(inventory)
 
 
-## Лимит дерева/стали (Этап 4.12): базовый + бонус Добытчика (+20 за уровень
-## его ветки). У других классов — базовый RESOURCE_CAP.
+## Лимит дерева/стали: базовый + бонус по уровню ветки «Добыча» (+20 за уровень,
+## правка 2026-06-17 — по уровню ветки, не по классу).
 func get_resource_cap() -> int:
-	var bonus := 20 * gather_level if player_class == "gather" else 0
-	return RESOURCE_CAP + bonus
+	return RESOURCE_CAP + 20 * gather_level
 
 
 ## Использовать ресурсы для крафта (возвращает true если достаточно).
@@ -187,12 +185,10 @@ func add_skill_point(amount: int = 1) -> void:
 	skills_changed.emit()
 
 
-## Потолок ветки (Этап 4.12): своя ветка — до SKILL_MAX, чужая — до OFF_CLASS_MAX.
-## Пока класс не выбран, все ветки трактуем как «свои» (полный потолок).
+## Потолок ветки: SKILL_MAX (3) для любой ветки (правка 2026-06-17 — без
+## ограничения чужих веток; класс влияет только на сигнатурную способность).
 func get_skill_cap(branch: String) -> int:
-	if player_class == "" or branch == player_class:
-		return SKILL_MAX.get(branch, 0)
-	return SKILL_BASE.get(branch, 0) + OFF_CLASS_EXTRA
+	return SKILL_MAX.get(branch, 0)
 
 
 ## Выбрать класс игрока (Этап 4.12). Вызывается экраном выбора класса один раз
