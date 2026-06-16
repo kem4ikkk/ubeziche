@@ -39,8 +39,19 @@ func _run_capture(args: PackedStringArray) -> void:
 	print("CLAUDE: на старте нет предустановленных мастерской/генератора — workshop:",
 			get_tree().get_nodes_in_group("workshop").size(),
 			", generator:", get_tree().get_nodes_in_group("generator").size(), " (ожидается 0/0)")
-	print("  узлов добычи на старте (случайный спавн): ",
-			get_tree().get_nodes_in_group("resource_node").size())
+	# Узлы добычи: случайное число и случайные места ВНЕ периметра убежища
+	# (радиус ≥ ~11 от центра) и не на стенах/постройках (Этап 4.31).
+	var rnodes := get_tree().get_nodes_in_group("resource_node")
+	var min_r := 999.0
+	var positions: Array = []
+	for n in rnodes:
+		if n is Node3D:
+			var d := Vector2((n as Node3D).global_position.x, (n as Node3D).global_position.z).length()
+			min_r = minf(min_r, d)
+			positions.append("(%.0f,%.0f)" % [(n as Node3D).global_position.x, (n as Node3D).global_position.z])
+	print("  узлов добычи на старте (случайное число): ", rnodes.size(),
+			"; мин. радиус от центра: %.1f" % min_r, " (ожидается ≥ 11 — вне базы)")
+	print("  позиции узлов (рандомные): ", ", ".join(positions))
 
 	# 1.5) Запускаем волну вручную (Этап 3.6: волны теперь стартуют ночью,
 	# но в коротком прогоне ждать наступления ночи не успеваем).
@@ -217,6 +228,13 @@ func _run_capture(args: PackedStringArray) -> void:
 		var placed: bool = build_system.try_place()
 		print("CLAUDE: построена стена: ", placed)
 		await get_tree().create_timer(0.2).timeout
+		# Нельзя ставить постройку на постройку (Этап 4.31): вторая стена в той же
+		# точке должна быть отклонена (место занято), даже если есть ресурсы.
+		InventorySystem.add_resource("wall", 1)
+		var placed_dup: bool = build_system.try_place()
+		print("  вторая стена на то же место отклонена: ", not placed_dup, " (ожидается true)")
+		if build_system.build_mode:
+			build_system.toggle()
 
 	_dump_state("ПОСЛЕ постройки")
 
@@ -819,6 +837,54 @@ func _run_capture(args: PackedStringArray) -> void:
 			await get_tree().create_timer(0.1).timeout
 			print("  swing_axe по узлу (навык 2): +", InventorySystem.get_resource(rnode2.resource_type) - rb)
 		_dump_state("ПОСЛЕ добычи (HP-удары)")
+
+	# 6.9915) Стрельба по зомби — урон ДОЛЖЕН проходить (регресс 4.22, исправлен
+	# 2026-06-16): зомби был на слое 4, как узлы добычи, а пуля исключала слой 4 →
+	# проходила сквозь зомби («Попадание» печаталось, а зомби невредим). Теперь
+	# узлы на слое 16, зомби на 4 — пуля попадает. Также проверяем, что пуля
+	# проходит СКВОЗЬ узел добычи (не блокируется им).
+	if is_instance_valid(player) and player is Node3D and player.has_method("shoot"):
+		print("CLAUDE: проверяю стрельбу по зомби (регресс урона 4.22)")
+		if player.has_method("heal"):
+			player.heal(1000.0)
+		get_tree().paused = false
+		for e in get_tree().get_nodes_in_group("enemy"):
+			e.queue_free()
+		(player as Node3D).global_position = Vector3(25, 1, 25)
+		player.switch_weapon(0)   # пистолет
+		player.current_ammo = player.magazine_size
+		await get_tree().create_timer(0.1).timeout
+		var cam_s := player.get_node_or_null("Camera3D") as Node3D
+		var zsc: PackedScene = load("res://scenes/zombie.tscn")
+		if cam_s != null and zsc != null:
+			# Горизонтальное направление взгляда; цели ставим на землю (origin y=1),
+			# чтобы капсула попала под горизонтальный луч из камеры (камера на ~2.6).
+			var fwd := -cam_s.global_transform.basis.z
+			fwd.y = 0.0
+			fwd = fwd.normalized()
+			var base := (player as Node3D).global_position
+			# Узел добычи на линии огня (ближе зомби) — пуля должна пройти мимо него.
+			var rn: PackedScene = load("res://scenes/resource_node.tscn")
+			var node_block := rn.instantiate()
+			node_block.resource_type = "wood"
+			node_block.harvestable = true
+			get_tree().current_scene.add_child(node_block)
+			(node_block as Node3D).global_position = base + fwd * 2.5
+			var zs := zsc.instantiate()
+			get_tree().current_scene.add_child(zs)
+			(zs as Node3D).global_position = base + fwd * 5.0
+			await get_tree().create_timer(0.1).timeout
+			var zhp0: float = zs.get_health() if zs.has_method("get_health") else -1.0
+			player.shoot()
+			await get_tree().create_timer(0.1).timeout
+			var zhp1: float = zs.get_health() if is_instance_valid(zs) and zs.has_method("get_health") else -1.0
+			print("  выстрел по зомби сквозь узел добычи: HP ", zhp0, " → ", zhp1,
+					" (должно убавиться на ", player.damage, ")")
+			if is_instance_valid(zs):
+				zs.queue_free()
+			if is_instance_valid(node_block):
+				node_block.queue_free()
+		_dump_state("ПОСЛЕ стрельбы по зомби")
 
 	# 6.992) Навыки (Этап 4.23): очки (3 на старте, +1 за пережитую ночь),
 	# ветки Добыча/Бой/Инженер; меню по клавише N.

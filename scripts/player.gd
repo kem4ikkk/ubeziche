@@ -106,9 +106,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Не даём камере перевернуться (смотрим почти вертикально вверх/вниз).
 		camera.rotation.x = clamp(camera.rotation.x, deg_to_rad(-89), deg_to_rad(89))
 
-	# Левая кнопка мыши.
+	# Левая кнопка мыши. Если открыто меню (курсор свободен для кликов по кнопкам) —
+	# ЛКМ не стреляет и НЕ перехватывает курсор (клики по кнопкам ловит GUI).
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if _any_menu_open():
+			pass
+		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if build_system.build_mode:
 				build_system.try_place()                  # в режиме постройки — строим
 			elif axe_equipped:
@@ -120,7 +123,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# B — открыть/закрыть меню построек (Этап 4.26). В режиме постройки B
 	# просто выходит из него. Само меню (build_menu.gd) выбирает постройку.
-	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_B:
 		if build_system.build_mode:
 			build_system.toggle()
 		else:
@@ -141,14 +144,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		equip_axe()
 
 	# N — открыть/закрыть меню навыков (Этап 4.23).
-	if event is InputEventKey and event.pressed and event.keycode == KEY_N:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_N:
 		var menu := get_tree().get_first_node_in_group("skill_menu")
 		if is_instance_valid(menu) and menu.has_method("toggle"):
 			menu.toggle()
 
-	# Esc — отпустить курсор.
+	# Esc — сначала закрывает любое открытое меню, иначе отпускает курсор.
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if _any_menu_open():
+			_close_all_menus()
+		else:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+## Открыто ли какое-либо UI-меню (навыки/постройки/мастерская). Пока меню открыто,
+## ЛКМ не действует в мире, а Esc закрывает меню (паузы в игре нет).
+func _any_menu_open() -> bool:
+	for grp in ["skill_menu", "build_menu", "workshop_menu"]:
+		var m := get_tree().get_first_node_in_group(grp)
+		if is_instance_valid(m) and m.visible:
+			return true
+	return false
+
+
+## Закрыть все открытые меню (Esc).
+func _close_all_menus() -> void:
+	for grp in ["skill_menu", "build_menu", "workshop_menu"]:
+		var m := get_tree().get_first_node_in_group(grp)
+		if is_instance_valid(m) and m.has_method("close"):
+			m.close()
 
 
 func _physics_process(delta: float) -> void:
@@ -221,16 +245,19 @@ func shoot() -> void:
 		var to := from + direction * shoot_range
 		var query := PhysicsRayQueryParameters3D.create(from, to)
 		query.exclude = [get_rid()]   # не попадаем лучом в самого себя
-		# Пули проходят сквозь узлы добычи (Этап 4.22): исключаем их слой (бит 2 = 4).
-		query.collision_mask = 0xFFFFFFFB
+		# Пули проходят сквозь узлы добычи (Этап 4.22): исключаем ИХ слой (бит 4 = 16).
+		# НЕ слой 4 — там зомби, иначе пули проходили бы сквозь врагов (баг до 2026-06-16).
+		query.collision_mask = 0xFFFFFFEF
 		var result := space_state.intersect_ray(query)
 
 		if result:
 			var collider = result.collider
-			# Если у объекта есть метод take_damage — наносим урон.
+			# Засчитываем попадание ТОЛЬКО если есть по чему наносить урон (враг/
+			# постройка). Раньше hits++ стоял безусловно → ложное «Попадание» при
+			# выстреле в землю/стену, хотя зомби невредим.
 			if collider.has_method("take_damage"):
 				collider.take_damage(damage)
-			hits += 1
+				hits += 1
 
 	if hits > 0:
 		print("Попадание: ", hits, " / ", pellets)

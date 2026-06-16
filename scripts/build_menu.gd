@@ -9,7 +9,6 @@ extends CanvasLayer
 
 var _capture_mode := false
 var _build_system: Node
-var _close_key_was_down := false   # для фронта нажатия клавиши закрытия (см. _process)
 
 
 func _ready() -> void:
@@ -33,25 +32,16 @@ func _resolve_build_system() -> Node:
 func toggle() -> void:
 	visible = not visible
 	if visible:
-		_close_key_was_down = true   # клавишу открытия не считаем закрытием
 		_rebuild()
+	# Паузы в игре НЕТ (решение автора 2026-06-16) — только курсор для кликов.
 	if not _capture_mode:
-		get_tree().paused = visible
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if visible else Input.MOUSE_MODE_CAPTURED
 
 
-## Пока меню открыто, игра на паузе и player.gd ввод не получает. Закрытие (B или
-## Esc) ловим ОПРОСОМ клавиш в _process (process_mode=ALWAYS работает на паузе).
-## Опрос вместо _unhandled_input специально: виртуал ввода на CanvasLayer при
-## выходе из дерева цепляет get_viewport()==null и роняет завершение прогона.
-func _process(_delta: float) -> void:
-	if _capture_mode or not visible:
-		_close_key_was_down = false
-		return
-	var down := Input.is_key_pressed(KEY_B) or Input.is_key_pressed(KEY_ESCAPE)
-	if down and not _close_key_was_down:
-		toggle()  # повторное нажатие B (или Esc) — закрыть
-	_close_key_was_down = down
+## Закрыть меню, если открыто (для Esc из player.gd).
+func close() -> void:
+	if visible:
+		toggle()
 
 
 func _rebuild() -> void:
@@ -64,11 +54,17 @@ func _rebuild() -> void:
 		var b_name: String = b.name
 		var min_tier: int = int(b.get("min_tier", 1))
 		var locked: bool = InventorySystem.shelter_tier < min_tier
+		# Нехватка ресурсов гасит кнопку прямо в меню (Этап 4.31), а не при попытке
+		# поставить. Тир-гейт показываем в приоритете (его не обойти ресурсами).
+		var poor: bool = not locked and not _can_afford(b.cost)
+		var suffix := ""
+		if locked:
+			suffix = "  (нужен Тир %d)" % min_tier
+		elif poor:
+			suffix = "  (не хватает ресурсов)"
 		var btn := Button.new()
-		btn.text = "%s — %s%s" % [
-				b_name, _cost_text(b.cost),
-				("  (нужен Тир %d)" % min_tier) if locked else ""]
-		btn.disabled = locked
+		btn.text = "%s — %s%s" % [b_name, _cost_text(b.cost), suffix]
+		btn.disabled = locked or poor
 		btn.pressed.connect(_on_pick.bind(b_name))
 		_list.add_child(btn)
 	# Кнопка выхода из режима постройки.
@@ -94,6 +90,14 @@ func _on_exit_build() -> void:
 	if bs != null and bs.build_mode:
 		bs.toggle()
 	toggle()
+
+
+## Хватает ли ресурсов на постройку (Этап 4.31): чтобы гасить кнопку в меню.
+func _can_afford(cost: Dictionary) -> bool:
+	for r in cost:
+		if InventorySystem.get_resource(r) < int(cost[r]):
+			return false
+	return true
 
 
 func _cost_text(cost: Dictionary) -> String:

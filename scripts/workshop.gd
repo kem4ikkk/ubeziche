@@ -22,7 +22,6 @@ const IMPROVED_AXE_COST := {"wood": 15, "steel": 5}
 
 var _player_inside: bool = false
 var _capture_mode: bool = false
-var _e_was_down: bool = false   # фронт нажатия E (опрос в _process, см. ниже)
 
 @onready var prompt: Label3D = $Prompt
 
@@ -47,20 +46,15 @@ func _on_body_exited(body: Node3D) -> void:
 		_update_prompt()
 
 
-## E (рядом с мастерской) открывает UI-меню крафта. Ловим ОПРОСОМ клавиши в
-## _process, а не через _unhandled_input: мастерскую теперь СТРОЯТ в рантайме
-## (Этап 4.30), а у такого узла виртуал ввода при разрушении дерева цепляет
-## get_viewport()==null и роняет завершение. Опрос этого лишён.
-func _process(_delta: float) -> void:
+## E (рядом с мастерской) открывает/закрывает UI-меню крафта. Паузы в игре нет,
+## поэтому ввод доходит штатно (в прогоне ввод выключен — тест дёргает методы).
+func _unhandled_input(event: InputEvent) -> void:
 	if _capture_mode or not _player_inside:
-		_e_was_down = false
 		return
-	var down := Input.is_key_pressed(KEY_E)
-	if down and not _e_was_down:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
 		var menu := get_tree().get_first_node_in_group("workshop_menu")
 		if is_instance_valid(menu) and menu.has_method("toggle"):
 			menu.toggle()
-	_e_was_down = down
 
 
 ## Крафт стены из ресурсов (дерево). Возвращает true при успехе.

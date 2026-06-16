@@ -108,6 +108,11 @@ func try_place() -> bool:
 		print("CLAUDE: мастерская уже построена")
 		return false
 
+	# Нельзя ставить постройку на постройку/стену/периметр (Этап 4.31).
+	if _is_spot_occupied(_ghost.global_position):
+		print("CLAUDE: место занято — здесь нельзя строить")
+		return false
+
 	var cost: Dictionary = buildable.cost
 	for resource_type in cost:
 		if InventorySystem.get_resource(resource_type) < cost[resource_type]:
@@ -122,6 +127,26 @@ func try_place() -> bool:
 	get_tree().current_scene.add_child(building)
 	building.global_position = _ghost.global_position
 	return true
+
+
+## Занята ли точка существующей постройкой/стеной/периметром (Этап 4.31): физ.
+## оверлап сферой по слою 1. Призрак коллизий не имеет (collision_layer=0), так
+## что себя не задевает; земля (WorldBoundary) сферой над полом не задевается.
+func _is_spot_occupied(pos: Vector3) -> bool:
+	if not is_inside_tree():
+		return false
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return false
+	var shape := SphereShape3D.new()
+	shape.radius = 0.45   # < половины клетки (1 м), чтобы не блокировать соседние
+	var params := PhysicsShapeQueryParameters3D.new()
+	params.shape = shape
+	params.transform = Transform3D(Basis(), pos)
+	params.collision_mask = 1
+	params.collide_with_bodies = true
+	params.collide_with_areas = false
+	return not space.intersect_shape(params, 1).is_empty()
 
 
 ## Пересобрать призрак-превью под текущий выбранный тип постройки.

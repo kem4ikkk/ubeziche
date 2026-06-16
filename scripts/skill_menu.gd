@@ -15,7 +15,6 @@ const BRANCHES := [
 
 var _rows: Array = []
 var _capture_mode := false
-var _close_key_was_down := false   # для фронта нажатия клавиши закрытия (см. _process)
 
 
 func _ready() -> void:
@@ -62,25 +61,16 @@ func _refresh() -> void:
 ## Открыть/закрыть меню (вызывается из player.gd по клавише N).
 func toggle() -> void:
 	visible = not visible
+	# Паузы в игре НЕТ (решение автора 2026-06-16): меню открыто — игра идёт.
+	# Только освобождаем/захватываем курсор для кликов по кнопкам.
 	if not _capture_mode:
-		get_tree().paused = visible
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if visible else Input.MOUSE_MODE_CAPTURED
 	if visible:
-		# Клавишу, которой только что открыли меню, не считаем «нажатием на
-		# закрытие» — ждём нового нажатия (см. _process).
-		_close_key_was_down = true
 		_refresh()
 
 
-## Пока меню открыто, игра на паузе и player.gd ввод не получает. Закрытие (N или
-## Esc) ловим ОПРОСОМ клавиш в _process (process_mode=ALWAYS работает на паузе).
-## Опрос вместо _unhandled_input специально: виртуал ввода на CanvasLayer при
-## выходе из дерева цепляет get_viewport()==null и роняет завершение прогона.
-func _process(_delta: float) -> void:
-	if _capture_mode or not visible:
-		_close_key_was_down = false
-		return
-	var down := Input.is_key_pressed(KEY_N) or Input.is_key_pressed(KEY_ESCAPE)
-	if down and not _close_key_was_down:
-		toggle()  # повторное нажатие N (или Esc) — закрыть
-	_close_key_was_down = down
+## Закрыть меню, если открыто (для Esc из player.gd). Открытие/закрытие по N —
+## простым toggle() из player.gd: паузы нет, player всегда получает ввод.
+func close() -> void:
+	if visible:
+		toggle()

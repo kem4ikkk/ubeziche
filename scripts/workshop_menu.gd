@@ -11,7 +11,6 @@ const BRANCH_NAME := {"combat": "Бой", "gather": "Добыча", "engineer": 
 
 var _capture_mode := false
 var _workshop: Node
-var _close_key_was_down := false   # для фронта нажатия клавиши закрытия (см. _process)
 
 
 func _ready() -> void:
@@ -31,25 +30,16 @@ func _resolve_workshop() -> Node:
 func toggle() -> void:
 	visible = not visible
 	if visible:
-		_close_key_was_down = true   # клавишу открытия не считаем закрытием
 		_rebuild()
+	# Паузы в игре НЕТ (решение автора 2026-06-16) — только курсор для кликов.
 	if not _capture_mode:
-		get_tree().paused = visible
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if visible else Input.MOUSE_MODE_CAPTURED
 
 
-## Пока меню открыто, игра на паузе и workshop.gd ввод не получает. Закрытие (E
-## или Esc) ловим ОПРОСОМ клавиш в _process (process_mode=ALWAYS работает на
-## паузе). Опрос вместо _unhandled_input специально: виртуал ввода на CanvasLayer
-## при выходе из дерева цепляет get_viewport()==null и роняет завершение прогона.
-func _process(_delta: float) -> void:
-	if _capture_mode or not visible:
-		_close_key_was_down = false
-		return
-	var down := Input.is_key_pressed(KEY_E) or Input.is_key_pressed(KEY_ESCAPE)
-	if down and not _close_key_was_down:
-		toggle()  # повторное нажатие E (или Esc) — закрыть
-	_close_key_was_down = down
+## Закрыть меню, если открыто (для Esc из player.gd).
+func close() -> void:
+	if visible:
+		toggle()
 
 
 func _rebuild() -> void:

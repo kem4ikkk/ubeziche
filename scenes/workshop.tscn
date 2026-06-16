@@ -28,7 +28,7 @@ surface_material_override/0 = SubResource("StandardMaterial3D_bench")
 [node name="Prompt" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 billboard = 1
-no_depth_test = true
+visibility_range_end = 12.0
 font_size = 28
 text = "Мастерская
 (подойдите ближе)"

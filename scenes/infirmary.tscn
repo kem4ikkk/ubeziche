@@ -47,6 +47,6 @@ max_health = 50.0
 [node name="HPLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
 billboard = 1
-no_depth_test = true
+visibility_range_end = 12.0
 font_size = 28
 text = "Лазарет 50 / 50"
