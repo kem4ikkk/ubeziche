@@ -13,6 +13,7 @@ extends CanvasLayer
 @onready var alert_label: Label = $AlertLabel
 @onready var evac_label: Label = $EvacLabel
 @onready var power_label: Label = $PowerLabel
+@onready var ability_label: Label = $AbilityLabel
 
 const ALERT_DURATION := 2.5  ## сколько секунд держим тревожное сообщение (Этап 4.9)
 
@@ -101,6 +102,7 @@ func _process(delta: float) -> void:
 		evac_label.visible = false
 
 	_update_power()
+	_update_ability()
 
 
 ## Строка питания (Этап 4.25): бюджет мощности генераторов vs потребление
@@ -123,6 +125,24 @@ func _update_power() -> void:
 			_on_power_lost()
 		else:
 			_on_power_restored()
+
+
+## Индикатор сигнатурной способности класса (Этап 4.12b): статус Авиаудара,
+## наличие Костра или число зарядов C4. Пусто, если класс/способность не выбраны.
+func _update_ability() -> void:
+	var cls: String = InventorySystem.player_class
+	if cls == "" or not InventorySystem.ability_unlocked():
+		ability_label.text = ""
+		return
+	match cls:
+		"combat":
+			var p := get_tree().get_first_node_in_group("player")
+			var cd: float = p._airstrike_cd if is_instance_valid(p) and "_airstrike_cd" in p else 0.0
+			ability_label.text = "Авиаудар (F): %s" % ("готов" if cd <= 0.0 else "%d c" % ceili(cd))
+		"gather":
+			ability_label.text = "Костёр (F)"
+		"engineer":
+			ability_label.text = "C4 (F): %d" % InventorySystem.c4_charges
 
 
 func _on_game_over(victory: bool) -> void:

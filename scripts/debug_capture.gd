@@ -989,6 +989,88 @@ func _run_capture(args: PackedStringArray) -> void:
 		InventorySystem.reset_run_progression()
 		_dump_state("ПОСЛЕ классов (4.12a)")
 
+	# 6.9926) Способности классов (Этап 4.12b): Авиаудар (AoE), Костёр (хил),
+	# C4 (AoE по зомби + снос сегмента blastable, но НЕ обычной постройки).
+	if is_instance_valid(player) and player is Node3D:
+		print("CLAUDE: проверяю способности классов (4.12b)")
+		# Оживляем игрока (в длинном прогоне он мог погибнуть) — для теста Костра.
+		var hc2 := player.get_node("HealthComponent") as HealthComponent
+		hc2.current_health = hc2.max_health
+		hc2.health_changed.emit(hc2.current_health, hc2.max_health)
+		var zsc2: PackedScene = load("res://scenes/zombie.tscn")
+		var wallsc: PackedScene = load("res://scenes/wall.tscn")
+		var blastsc: PackedScene = load("res://scenes/blastable_segment.tscn")
+		# --- Авиаудар (Боец): AoE по точке, затем кулдаун.
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("combat")
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("combat")
+		InventorySystem.unlock_ability()
+		player.airstrike_delay = 0.2
+		var az := zsc2.instantiate()
+		get_tree().current_scene.add_child(az)
+		var apos := Vector3(40, 1, 40)
+		(az as Node3D).global_position = apos
+		await get_tree().create_timer(0.1).timeout
+		player._resolve_airstrike(apos)
+		await get_tree().create_timer(0.4).timeout
+		print("  Авиаудар: зомби уничтожен=", not is_instance_valid(az),
+				" (урон ", player.airstrike_damage, ")")
+		player._call_airstrike()
+		print("  Авиаудар кулдаун после вызова: ", player._airstrike_cd > 0.0, " (ожидается true)")
+		# --- Костёр (Добытчик): лечит игрока рядом.
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("gather")
+		InventorySystem.unlock_ability()
+		player.heal(1000.0)
+		player.take_damage(40.0)
+		var php0: float = player.get_health()
+		player._place_campfire()
+		await get_tree().create_timer(0.6).timeout
+		print("  Костёр: HP игрока ", php0, " → ", player.get_health(), " (должно вырасти)")
+		for c in get_tree().get_nodes_in_group("campfire"):
+			c.queue_free()
+		# --- C4 (Инженер): крафт заряда + взрыв (зомби + снос blastable, базу не трогает).
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("engineer")
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("engineer")
+		InventorySystem.unlock_ability()
+		InventorySystem.add_resource("wood", 50)
+		InventorySystem.add_resource("steel", 50)
+		var ws2 := get_tree().get_first_node_in_group("workshop")
+		var charges0: int = InventorySystem.c4_charges
+		if is_instance_valid(ws2) and ws2.has_method("craft_c4"):
+			ws2.craft_c4()
+		print("  крафт C4: зарядов ", charges0, " → ", InventorySystem.c4_charges, " (ожидается +1)")
+		var cpos := Vector3(45, 1, 45)
+		var cz := zsc2.instantiate()
+		get_tree().current_scene.add_child(cz)
+		(cz as Node3D).global_position = cpos
+		var seg := blastsc.instantiate()
+		get_tree().current_scene.add_child(seg)
+		(seg as Node3D).global_position = cpos + Vector3(1.5, 0, 0)
+		var wll := wallsc.instantiate()
+		get_tree().current_scene.add_child(wll)
+		(wll as Node3D).global_position = cpos + Vector3(0, 0, 1.5)
+		await get_tree().create_timer(0.1).timeout
+		var c4sc: PackedScene = load("res://scenes/c4.tscn")
+		var c4 := c4sc.instantiate()
+		c4.fuse = 0.2
+		c4.radius = 4.0
+		get_tree().current_scene.add_child(c4)
+		(c4 as Node3D).global_position = cpos
+		await get_tree().create_timer(0.4).timeout
+		print("  C4: зомби уничтожен=", not is_instance_valid(cz),
+				", сегмент blastable снесён=", not is_instance_valid(seg),
+				", обычная постройка цела=", is_instance_valid(wll), " (ожидается true/true/true)")
+		if is_instance_valid(wll):
+			wll.queue_free()
+		if is_instance_valid(seg):
+			seg.queue_free()
+		InventorySystem.reset_run_progression()
+		_dump_state("ПОСЛЕ способностей (4.12b)")
+
 	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
 	# меняет точку каждый день; рядом покупается оружие за деньги (тест покупки —
 	# в секции 4.6 выше через market.buy_weapon).

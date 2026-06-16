@@ -64,6 +64,18 @@ var _swing_timer: float = 0.0
 # Базовый максимум HP (из сцены) — к нему добавляется бонус класса Боец (4.12).
 var _base_max_health: float = 100.0
 
+# Сигнатурные способности классов (Этап 4.12b), активируются клавишей F.
+# Авиаудар (Боец): по точке прицела с задержкой — AoE по зомби, затем кулдаун.
+@export var airstrike_delay: float = 1.5
+@export var airstrike_radius: float = 5.0
+@export var airstrike_damage: float = 80.0
+@export var airstrike_cooldown: float = 25.0
+var _airstrike_cd: float = 0.0
+# Сцены, которые ставит игрок: костёр (Добытчик) и заряд C4 (Инженер).
+@export var campfire_scene: PackedScene
+@export var c4_scene: PackedScene
+@export var c4_place_range: float = 8.0   # на какую дальность по прицелу кладём C4
+
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
 @onready var health: HealthComponent = $HealthComponent
@@ -154,6 +166,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
 		equip_axe()
 
+	# F — сигнатурная способность класса (Этап 4.12b): Авиаудар/Костёр/C4.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
+		use_class_ability()
+
 	# N — открыть/закрыть меню навыков (Этап 4.23).
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_N:
 		var menu := get_tree().get_first_node_in_group("skill_menu")
@@ -190,6 +206,10 @@ func _physics_process(delta: float) -> void:
 	# Кулдаун удара топором (Этап 4.27).
 	if _swing_timer > 0.0:
 		_swing_timer -= delta
+
+	# Кулдаун авиаудара (Этап 4.12b).
+	if _airstrike_cd > 0.0:
+		_airstrike_cd -= delta
 
 	# Зажатая ЛКМ с топором — НЕПРЕРЫВНАЯ добыча/ремонт/бой (правка 2026-06-16):
 	# можно зажать кнопку и рубить, темп задаёт кулдаун в swing_axe(). Для стволов
@@ -493,6 +513,88 @@ func heal(amount: float) -> void:
 	health.heal(amount)
 
 
+## Сигнатурная способность класса (Этап 4.12b), клавиша F. Ветвится по классу и
+## наличию открытой способности (InventorySystem). В capture-режиме F не читается —
+## тест дёргает _call_airstrike/_place_campfire/_place_c4 напрямую.
+func use_class_ability() -> void:
+	match InventorySystem.player_class:
+		"combat":
+			if InventorySystem.has_airstrike:
+				_call_airstrike()
+		"gather":
+			if InventorySystem.has_campfire:
+				_place_campfire()
+		"engineer":
+			if InventorySystem.has_c4:
+				_place_c4()
+
+
+## Авиаудар (Боец): по точке прицела, с задержкой — AoE урон по зомби, кулдаун.
+func _call_airstrike() -> void:
+	if _airstrike_cd > 0.0:
+		print("CLAUDE: авиаудар на кулдауне (", ceili(_airstrike_cd), " c)")
+		return
+	var target := _aim_ground_point(30.0)
+	_airstrike_cd = airstrike_cooldown
+	print("Авиаудар вызван по точке ", target)
+	_resolve_airstrike(target)
+
+
+func _resolve_airstrike(target: Vector3) -> void:
+	await get_tree().create_timer(airstrike_delay).timeout
+	if not is_inside_tree():
+		return
+	var hits := 0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if e is Node3D and (e as Node3D).global_position.distance_to(target) <= airstrike_radius \
+				and e.has_method("take_damage"):
+			e.take_damage(airstrike_damage)
+			hits += 1
+	print("Авиаудар: попал по ", hits, " врагам (радиус ", airstrike_radius, ", урон ", airstrike_damage, ")")
+
+
+## Костёр (Добытчик): ставит один костёр у игрока (новый заменяет старый).
+func _place_campfire() -> void:
+	if campfire_scene == null:
+		return
+	for c in get_tree().get_nodes_in_group("campfire"):
+		c.queue_free()
+	var fire := campfire_scene.instantiate()
+	get_tree().current_scene.add_child(fire)
+	(fire as Node3D).global_position = global_position
+	print("Костёр поставлен")
+
+
+## C4 (Инженер): тратит заряд, ставит C4 в точку прицела (взрыв через таймер в c4.gd).
+func _place_c4() -> void:
+	if c4_scene == null:
+		return
+	if InventorySystem.c4_charges <= 0:
+		print("CLAUDE: нет зарядов C4 (крафт в мастерской)")
+		return
+	InventorySystem.c4_charges -= 1
+	var target := _aim_ground_point(c4_place_range)
+	var charge := c4_scene.instantiate()
+	get_tree().current_scene.add_child(charge)
+	(charge as Node3D).global_position = target
+	print("C4 установлен (осталось зарядов ", InventorySystem.c4_charges, ")")
+
+
+## Точка на земле, куда смотрит игрок: луч из камеры; если ни во что не попал —
+## проецируем дальнюю точку на уровень земли (y≈0).
+func _aim_ground_point(max_dist: float) -> Vector3:
+	var from := camera.global_position
+	var dir := -camera.global_transform.basis.z
+	var to := from + dir * max_dist
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = [get_rid()]
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	if r:
+		return r.position
+	to.y = 0.0
+	return to
+
+
 ## Класс Боец (Этап 4.12): пересчёт макс HP = база + 15 за уровень ветки «Бой»
 ## (только если выбран класс «combat»). При росте максимума подлечиваем на дельту.
 func _apply_combat_hp() -> void:
@@ -503,7 +605,8 @@ func _apply_combat_hp() -> void:
 	var delta: float = new_max - health.max_health
 	health.max_health = new_max
 	if delta > 0.0 and health.current_health > 0.0:
-		health.current_health = minf(health.current_health + delta, new_max)
+		health.current_health += delta            # рост максимума — подлечиваем
+	health.current_health = minf(health.current_health, new_max)  # максимум упал — не выше него
 	health.health_changed.emit(health.current_health, health.max_health)
 
 

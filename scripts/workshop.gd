@@ -89,6 +89,27 @@ func upgrade_shelter_tier() -> bool:
 ## Ключи классовых инструментов для меню (Этап 4.27).
 const TOOL_KEYS := ["knife", "improved_axe", "hammer"]
 
+## C4 (Этап 4.12b): крафт заряда за ресурсы. Доступен только Инженеру с открытой
+## способностью C4 (InventorySystem.has_c4). Каждый крафт даёт один заряд.
+const C4_COST := {"wood": 10, "steel": 15}
+
+
+## Крафт заряда C4 (Инженер). Возвращает true при успехе.
+func craft_c4() -> bool:
+	if not InventorySystem.has_c4:
+		print("Мастерская: C4 недоступен (нужен класс Инженер и открытая способность C4)")
+		return false
+	if InventorySystem.get_resource("wood") < C4_COST.wood \
+			or InventorySystem.get_resource("steel") < C4_COST.steel:
+		print("Мастерская: не хватает ресурсов для C4 (нужно ",
+				C4_COST.wood, " дерева, ", C4_COST.steel, " стали)")
+		return false
+	InventorySystem.use_resource("wood", C4_COST.wood)
+	InventorySystem.use_resource("steel", C4_COST.steel)
+	InventorySystem.c4_charges += 1
+	print("Мастерская: скрафтили C4 (зарядов: ", InventorySystem.c4_charges, ")")
+	return true
+
 
 ## Крафт Молота (Инженер): ремонт x2 HP + скорость атаки как у ножа.
 func craft_hammer() -> bool:

@@ -72,6 +72,11 @@ func _rebuild() -> void:
 					BRANCH_NAME.get(spec.branch, spec.branch), spec.req_level,
 					"  🔒" if locked else ""]
 		_add_button(label, owned or locked, func() -> void: ws.craft_tool(key); _rebuild())
+	# C4 (Этап 4.12b) — только Инженеру с открытой способностью C4.
+	if InventorySystem.has_c4:
+		_add_button("C4 (%d дерева, %d стали) — заряд (есть: %d)" % [
+				ws.C4_COST.wood, ws.C4_COST.steel, InventorySystem.c4_charges],
+				false, func() -> void: ws.craft_c4(); _rebuild())
 
 
 func _add_button(text: String, disabled: bool, cb: Callable) -> void:

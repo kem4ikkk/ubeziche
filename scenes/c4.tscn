@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3 uid="uid://bc4charge00001"]
+
+[ext_resource type="Script" path="res://scripts/c4.gd" id="1_c4"]
+
+[sub_resource type="BoxMesh" id="mesh_c4"]
+size = Vector3(0.4, 0.2, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="mat_c4"]
+albedo_color = Color(0.8, 0.15, 0.1, 1)
+
+[node name="C4" type="Node3D"]
+script = ExtResource("1_c4")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+mesh = SubResource("mesh_c4")
+material_override = SubResource("mat_c4")
