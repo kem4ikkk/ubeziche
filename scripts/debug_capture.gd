@@ -1249,6 +1249,22 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  после входа в зону: game_over=", game_state.is_game_over, ", HUD итог: '", result_text, "'")
 		_dump_state("ПОСЛЕ эвакуации")
 
+	# 6.999) Финал: показываем графическое дерево навыков на снимке (Этап 4.12d).
+	if is_instance_valid(player):
+		InventorySystem.reset_run_progression()
+		InventorySystem.set_class("combat")
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("combat")   # Бой ур.2
+		InventorySystem.upgrade_skill("combat")
+		InventorySystem.unlock_ability()           # открыт Авиаудар
+		InventorySystem.upgrade_skill("gather")    # чужая ветка +1 (демонстрация лимита)
+		var sm_show := get_tree().get_first_node_in_group("skill_menu")
+		if is_instance_valid(sm_show) and sm_show.has_method("toggle") and not sm_show.visible:
+			sm_show.toggle()
+		if is_instance_valid(hud):
+			hud.result_screen.visible = false       # дерево не перекрывать оверлеем итога
+		await get_tree().create_timer(0.2).timeout
+
 	# 7) Снимок экрана (ждём отрисовку кадра).
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
