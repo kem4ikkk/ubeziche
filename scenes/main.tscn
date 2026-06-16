@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_zombie"]
@@ -7,15 +7,14 @@
 [ext_resource type="PackedScene" path="res://scenes/evacuation_zone.tscn" id="9_evac"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/wave_manager.gd" id="4_wave"]
-[ext_resource type="PackedScene" path="res://scenes/resource_pickup.tscn" id="5_pickup"]
 [ext_resource type="Script" path="res://scripts/day_night_cycle.gd" id="6_daynight"]
 [ext_resource type="Script" path="res://scripts/game_state_manager.gd" id="7_gamestate"]
-[ext_resource type="PackedScene" path="res://scenes/workshop.tscn" id="8_workshop"]
-[ext_resource type="PackedScene" path="res://scenes/generator.tscn" id="10_generator"]
 [ext_resource type="PackedScene" path="res://scenes/skill_menu.tscn" id="11_skillmenu"]
 [ext_resource type="PackedScene" path="res://scenes/black_market.tscn" id="12_market"]
 [ext_resource type="PackedScene" path="res://scenes/build_menu.tscn" id="13_buildmenu"]
 [ext_resource type="PackedScene" path="res://scenes/workshop_menu.tscn" id="14_wsmenu"]
+[ext_resource type="Script" path="res://scripts/resource_spawner.gd" id="15_resspawn"]
+[ext_resource type="PackedScene" path="res://scenes/resource_node.tscn" id="16_resnode"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -225,40 +224,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 13)
 [node name="Spawn6" type="Marker3D" parent="WaveManager/SpawnPoints"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 13)
 
-[node name="Workshop" parent="." instance=ExtResource("8_workshop")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, 3)
-
 [node name="BlackMarket" parent="." instance=ExtResource("12_market")]
 
 [node name="EvacuationZone" parent="." instance=ExtResource("9_evac")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, 14)
 
-[node name="Generator" parent="." instance=ExtResource("10_generator")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.5, 0)
-
-[node name="Resources" type="Node3D" parent="."]
-
-[node name="WoodPickup1" parent="Resources" instance=ExtResource("5_pickup")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.5, 5)
-resource_type = "wood"
-harvestable = true
-
-[node name="WoodPickup2" parent="Resources" instance=ExtResource("5_pickup")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.5, -5)
-resource_type = "wood"
-harvestable = true
-
-[node name="SteelPickup1" parent="Resources" instance=ExtResource("5_pickup")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.5, -5)
-resource_type = "steel"
-harvestable = true
-
-[node name="SteelPickup2" parent="Resources" instance=ExtResource("5_pickup")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.5, 5)
-resource_type = "steel"
-harvestable = true
-
-[node name="SteelPickup3" parent="Resources" instance=ExtResource("5_pickup")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.5, -2)
-resource_type = "steel"
-harvestable = true
+[node name="ResourceSpawner" type="Node3D" parent="."]
+script = ExtResource("15_resspawn")
+node_scene = ExtResource("16_resnode")

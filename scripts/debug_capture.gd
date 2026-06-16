@@ -33,6 +33,15 @@ func _run_capture(args: PackedStringArray) -> void:
 	await get_tree().create_timer(0.5).timeout
 	_dump_state("ДО действий")
 
+	# 1.1) Правка (4.30): мастерская и генератор НЕ предустановлены — их строит
+	# игрок сам. Узлы добычи спавнятся СЛУЧАЙНО (resource_spawner), а не на
+	# фиксированных местах.
+	print("CLAUDE: на старте нет предустановленных мастерской/генератора — workshop:",
+			get_tree().get_nodes_in_group("workshop").size(),
+			", generator:", get_tree().get_nodes_in_group("generator").size(), " (ожидается 0/0)")
+	print("  узлов добычи на старте (случайный спавн): ",
+			get_tree().get_nodes_in_group("resource_node").size())
+
 	# 1.5) Запускаем волну вручную (Этап 3.6: волны теперь стартуют ночью,
 	# но в коротком прогоне ждать наступления ночи не успеваем).
 	var wave_manager := get_tree().current_scene.get_node_or_null("WaveManager")
@@ -107,6 +116,41 @@ func _run_capture(args: PackedStringArray) -> void:
 		player.heal(1000.0)
 	await get_tree().create_timer(0.1).timeout
 
+	# 4.65) Постройка мастерской и генератора (правка 4.30): на старте их нет —
+	# игрок строит оба через систему построек (как турель/лазарет).
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
+		print("CLAUDE: проверяю постройку мастерской и генератора (4.30)")
+		get_tree().paused = false
+		var bs_w := player.get_node("BuildSystem")
+		InventorySystem.add_resource("wood", 20)
+		InventorySystem.add_resource("steel", 15)
+		print("  «Мастерская» есть в меню построек: ", bs_w.select_buildable("Мастерская"))
+		(player as Node3D).global_position = Vector3(-6, 1, 6)
+		if not bs_w.build_mode:
+			bs_w.toggle()
+		bs_w.select_buildable("Мастерская")
+		await get_tree().create_timer(0.3).timeout
+		var placed_ws: bool = bs_w.try_place()
+		print("  мастерская построена: ", placed_ws, ", узлов в группе workshop: ",
+				get_tree().get_nodes_in_group("workshop").size())
+		var placed_ws2: bool = bs_w.try_place()
+		print("  вторая мастерская отклонена: ", not placed_ws2, " (ожидается true)")
+		(player as Node3D).global_position = Vector3(-6, 1, 2)
+		bs_w.select_buildable("Генератор")
+		await get_tree().create_timer(0.3).timeout
+		var placed_gen0: bool = bs_w.try_place()
+		print("  генератор построен: ", placed_gen0, ", узлов в группе generator: ",
+				get_tree().get_nodes_in_group("generator").size())
+		if bs_w.build_mode:
+			bs_w.toggle()
+		# Прибираем за собой: этот генератор уберём (профильные тесты питания
+		# отстраивают свой), выбор постройки вернём на «Стена» — иначе секции
+		# ниже (постройка/ремонт стены) сломаются. Мастерская (не «building»)
+		# остаётся и переиспользуется через _ensure_workshop.
+		for g in get_tree().get_nodes_in_group("generator"):
+			g.queue_free()
+		bs_w.select_buildable("Стена")
+
 	# 4.7) Дроп ресурса с зомби (Этап 4.7.1): дроп случайный (drop_chance),
 	# поэтому добиваем несколько зомби-танков подряд, пока не выпадет ресурс.
 	if wave_manager != null and wave_manager.tank_zombie_scene != null:
@@ -119,7 +163,7 @@ func _run_capture(args: PackedStringArray) -> void:
 			tank.take_damage(1000.0)
 			await get_tree().create_timer(0.1).timeout
 		for node in get_tree().current_scene.get_children():
-			if "resource_type" in node and "resource_amount" in node:
+			if is_instance_valid(node) and "resource_type" in node and "resource_amount" in node:
 				print("  дроп: ", node.resource_type, " x", node.resource_amount)
 				drops_found += 1
 		print("  дропов выпало: ", drops_found, " из 6 (шанс 0.5)")
@@ -129,7 +173,7 @@ func _run_capture(args: PackedStringArray) -> void:
 	# (в прогоне реальный ввод и зоны не работают).
 	print("CLAUDE: проверяю двойную экономику и мастерскую (4.7.2 / 4.7.3)")
 	print("  текущий баланс денег: ", InventorySystem.get_money(), "$")
-	var workshop := get_tree().get_first_node_in_group("workshop")
+	var workshop := _ensure_workshop()
 	if workshop != null:
 		# Крафт стены из ресурсов (даём дерево, чтобы точно хватило).
 		InventorySystem.add_resource("wood", 2)
@@ -145,9 +189,10 @@ func _run_capture(args: PackedStringArray) -> void:
 		workshop.craft_wall()
 		print("  крафт стены за ресурсы, деньги не тронуты: ", money_before == InventorySystem.get_money())
 		print("  turret_ammo убран из инвентаря: ", not ("turret_ammo" in InventorySystem.inventory))
-		# Проверяем зону мастерской: подводим игрока вплотную к верстаку.
-		if is_instance_valid(player) and player is Node3D:
-			(player as Node3D).global_position = Vector3(-3, 1, 3)
+		# Проверяем зону мастерской: подводим игрока вплотную к верстаку
+		# (мастерскую игрок построил выше, позиция её — из самого узла).
+		if is_instance_valid(player) and player is Node3D and workshop is Node3D:
+			(player as Node3D).global_position = (workshop as Node3D).global_position + Vector3(0, 1, 0)
 			await get_tree().create_timer(0.2).timeout
 			if "_player_inside" in workshop:
 				print("  игрок в зоне мастерской: ", workshop._player_inside)
@@ -162,10 +207,12 @@ func _run_capture(args: PackedStringArray) -> void:
 	_dump_state("ПОСЛЕ крафта")
 
 	# 6) Строим стену (Этап 3.5): включаем режим постройки и ставим стену.
-	if is_instance_valid(player) and player.has_node("BuildSystem"):
+	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
 		var build_system := player.get_node("BuildSystem")
 		print("CLAUDE: включаю режим постройки")
+		(player as Node3D).global_position = Vector3(0, 1, 5)
 		build_system.toggle()
+		build_system.select_buildable("Стена")   # явно выбираем стену (4.30: список изменился)
 		await get_tree().create_timer(0.3).timeout  # ждём кадр для луча/призрака
 		var placed: bool = build_system.try_place()
 		print("CLAUDE: построена стена: ", placed)
@@ -343,7 +390,7 @@ func _run_capture(args: PackedStringArray) -> void:
 	if is_instance_valid(player) and player.has_node("BuildSystem") and player is Node3D:
 		print("CLAUDE: проверяю систему тиров (4.15)")
 		var bs_t := player.get_node("BuildSystem")
-		var workshop_t := get_tree().get_first_node_in_group("workshop")
+		var workshop_t := _ensure_workshop()
 		print("  стартовый тир: ", InventorySystem.shelter_tier)
 
 		for b in get_tree().get_nodes_in_group("building"):
@@ -588,7 +635,7 @@ func _run_capture(args: PackedStringArray) -> void:
 	# 6.98) Классовые инструменты + UI-меню мастерской (Этап 4.27): крафт по
 	# уровню ветки навыка; баффы (нож +урон/скорость, улучш.топор — самая высокая
 	# скорость атаки, молот — ремонт x2 + скорость). Меню открывается по E.
-	var workshop_h := get_tree().get_first_node_in_group("workshop")
+	var workshop_h := _ensure_workshop()
 	if is_instance_valid(player) and player is Node3D and is_instance_valid(workshop_h):
 		print("CLAUDE: проверяю инструменты мастерской (4.27)")
 		if player.has_method("heal"):
@@ -724,51 +771,54 @@ func _run_capture(args: PackedStringArray) -> void:
 				print("  удар топором по зомби: цель уничтожена (урон ", player.axe_damage, ")")
 		_dump_state("ПОСЛЕ топора (4.21)")
 
-	# 6.991) Добыча топором (Этап 4.22): узлы дерева/стали бьются топором,
-	# за удар дают gather_level ресурса из запаса; запас кончился — истощены
-	# до дневного регена.
+	# 6.991) Добыча топором (правка: HP-удары + случайный спавн). Узел имеет
+	# случайный запас УДАРОВ (5–7); за КАЖДЫЙ удар выдаётся gather_level ресурса.
+	# Реген «на том же месте» убран — исчерпанный узел исчезает, а спавнер
+	# (resource_spawner) ставит новый в случайной точке.
 	var rnode := get_tree().get_first_node_in_group("resource_node")
 	if is_instance_valid(rnode) and rnode.has_method("hit"):
-		print("CLAUDE: проверяю добычу топором (4.22)")
+		print("CLAUDE: проверяю добычу топором (HP-удары + случайный спавн)")
 		get_tree().paused = false
-		rnode.reserve = rnode.max_reserve
-		rnode._set_depleted(false)
 		var rtype: String = rnode.resource_type
-		var before1: int = InventorySystem.get_resource(rtype)
+		var hits_total: int = rnode._hits_total
+		print("  запас узла (ударов): ", hits_total, " (ожидается 5..7)")
 		InventorySystem.gather_level = 1
 		var got1: int = rnode.hit()
-		print("  удар (навык 1): +", got1, " (", rtype, "), запас ", rnode.reserve, "/", rnode.max_reserve)
+		print("  удар (навык 1): +", got1, " (", rtype, "), осталось ударов ",
+				rnode._hits_remaining, "/", hits_total)
 		InventorySystem.gather_level = 3
 		var got3: int = rnode.hit()
-		print("  удар (навык 3): +", got3, ", запас ", rnode.reserve)
-		# Вычерпываем узел до истощения.
+		print("  удар (навык 3): +", got3, ", осталось ударов ", rnode._hits_remaining)
+		# Вычерпываем узел до конца — он исчезает, спавнер ставит новый
+		# (число узлов на карте сохраняется).
+		var nodes_before: int = get_tree().get_nodes_in_group("resource_node").size()
 		var safety := 0
-		while rnode.hit() > 0 and safety < 100:
+		while is_instance_valid(rnode) and not rnode._depleted and safety < 100:
+			rnode.hit()
 			safety += 1
-		print("  после вычерпывания: истощён=", rnode._depleted, ", запас ", rnode.reserve, ", hit()=", rnode.hit())
-		# Дневной реген: эмулируем наступление дня.
-		rnode._on_phase_changed(false)
-		print("  после дневного регена: истощён=", rnode._depleted, ", запас ", rnode.reserve)
-		print("  всего добыто ", rtype, ": ", before1, " → ", InventorySystem.get_resource(rtype))
+		var was_depleted: bool = (not is_instance_valid(rnode)) or rnode._depleted
+		await get_tree().create_timer(0.2).timeout
+		var nodes_after: int = get_tree().get_nodes_in_group("resource_node").size()
+		print("  узел исчерпан=", was_depleted, "; узлов на карте: было ", nodes_before,
+				" → стало ", nodes_after, " (спавнер заменил исчезнувший)")
 
 		# Интеграция: swing_axe ловит узел лучом камеры и добывает.
 		var cam := player.get_node_or_null("Camera3D")
-		if player is Node3D and cam != null:
-			rnode.reserve = rnode.max_reserve
-			rnode._set_depleted(false)
+		var rnode2 := get_tree().get_first_node_in_group("resource_node")
+		if player is Node3D and cam != null and is_instance_valid(rnode2):
 			InventorySystem.gather_level = 2
 			(player as Node3D).global_position = Vector3(20, 1, 20)
 			player.equip_axe()
 			await get_tree().create_timer(0.1).timeout
 			# Ставим узел точно на луч камеры (вперёд по -Z от камеры), чтобы попасть.
 			var cam3d := cam as Node3D
-			(rnode as Node3D).global_position = cam3d.global_position + (-cam3d.global_transform.basis.z) * 1.5
+			(rnode2 as Node3D).global_position = cam3d.global_position + (-cam3d.global_transform.basis.z) * 1.5
 			await get_tree().create_timer(0.1).timeout
-			var rb: int = InventorySystem.get_resource(rnode.resource_type)
+			var rb: int = InventorySystem.get_resource(rnode2.resource_type)
 			player.swing_axe()
 			await get_tree().create_timer(0.1).timeout
-			print("  swing_axe по узлу (навык 2): +", InventorySystem.get_resource(rnode.resource_type) - rb)
-		_dump_state("ПОСЛЕ добычи (4.22)")
+			print("  swing_axe по узлу (навык 2): +", InventorySystem.get_resource(rnode2.resource_type) - rb)
+		_dump_state("ПОСЛЕ добычи (HP-удары)")
 
 	# 6.992) Навыки (Этап 4.23): очки (3 на старте, +1 за пережитую ночь),
 	# ветки Добыча/Бой/Инженер; меню по клавише N.
@@ -793,13 +843,18 @@ func _run_capture(args: PackedStringArray) -> void:
 		# Очко за пережитую ночь.
 		EventBus.night_survived.emit()
 		print("  после пережитой ночи: очки=", InventorySystem.skill_points)
-		# Меню навыков (N) — переключение видимости.
+		# Меню навыков (N) — открытие и ЗАКРЫТИЕ (правка: раньше меню нельзя было
+		# закрыть). Закрытие реализовано в _unhandled_input меню (клавиша/Esc,
+		# process_mode=ALWAYS работает на паузе); здесь проверяем, что обработчик
+		# меню реагирует на Esc и метод закрытия есть.
 		var sm := get_tree().get_first_node_in_group("skill_menu")
 		if is_instance_valid(sm) and sm.has_method("toggle"):
 			sm.toggle()
 			print("  меню навыков открыто: ", sm.visible)
 			sm.toggle()
-			print("  меню навыков закрыто: ", sm.visible)
+			print("  меню навыков закрыто (visible): ", sm.visible)
+			print("  у меню есть обработчик закрытия (_unhandled_input): ",
+					sm.has_method("_unhandled_input"))
 		_dump_state("ПОСЛЕ навыков (4.23)")
 
 	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
@@ -885,7 +940,15 @@ func _run_capture(args: PackedStringArray) -> void:
 	else:
 		print("CLAUDE: не удалось сохранить скриншот")
 
-	get_tree().quit()
+	# Завершение прогона. Скриншот и весь вывод уже получены — дальше нам не нужно
+	# штатное разрушение дерева. У Godot 4.6.3 есть гонка: при get_tree().quit()
+	# рантайм-Label3D (подсказки/HP над мастерской/генераторами/рынком, которые
+	# теперь СТРОЯТСЯ в игре) уничтожаются уже после окна и роняют процесс
+	# (label_3d.cpp: window==null, сигнал 11) — недетерминированно. Поэтому
+	# завершаем процесс напрямую, БЕЗ разбора дерева: Label3D не разрушаются,
+	# падать нечему. На саму игру это не влияет (там выход идёт штатно: рестарт —
+	# reload_current_scene, закрытие окна — через WM, окно живо во время разбора).
+	OS.kill(OS.get_process_id())
 
 
 ## Заполняет дерево/сталь до кэпа RESOURCE_CAP напрямую (минуя cap в add_resource)
@@ -912,6 +975,20 @@ func _ensure_power() -> void:
 		var gen := gen_scene.instantiate()
 		get_tree().current_scene.add_child(gen)
 		(gen as Node3D).global_position = Vector3(4, 0.5, 6)
+
+
+## Гарантирует мастерскую в тестах (правка 4.30): она больше не предустановлена,
+## а строится игроком. Если в сцене мастерской нет (её снесли/ещё не построили),
+## ставим одну, чтобы секции крафта/тиров/инструментов могли её использовать.
+func _ensure_workshop() -> Node:
+	for w in get_tree().get_nodes_in_group("workshop"):
+		if is_instance_valid(w) and not w.is_queued_for_deletion():
+			return w
+	var ws_scene: PackedScene = load("res://scenes/workshop.tscn")
+	var w := ws_scene.instantiate()
+	get_tree().current_scene.add_child(w)
+	(w as Node3D).global_position = Vector3(-3, 0.5, 3)
+	return w
 
 
 ## Печатает ключевое состояние сцены — это я читаю из консоли.

@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://b8resnode00001"]
+
+[ext_resource type="Script" path="res://scripts/resource_pickup.gd" id="1_resnode"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_node"]
+size = Vector3(0.8, 1.8, 0.8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_node"]
+size = Vector3(0.8, 1.8, 0.8)
+
+[node name="ResourceNode" type="Area3D"]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1_resnode")
+harvestable = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_node")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_node")

@@ -17,6 +17,7 @@ const MAX_GENERATORS := 4  # лимит ставимых генераторов 
 @export var mortar_scene: PackedScene
 @export var gatling_scene: PackedScene
 @export var generator_scene: PackedScene
+@export var workshop_scene: PackedScene
 
 var build_mode: bool = false
 var _ghost: Node3D
@@ -30,11 +31,12 @@ var _current: int = 0
 func _ready() -> void:
 	_buildables = [
 		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}, "min_tier": 1},
+		{"name": "Мастерская", "scene": workshop_scene, "cost": {"wood": 10, "steel": 5}, "min_tier": 1},
+		{"name": "Генератор", "scene": generator_scene, "cost": {"steel": 10, "wood": 5}, "min_tier": 1},
 		{"name": "Турель", "scene": turret_scene, "cost": {"steel": 3, "wood": 2}, "min_tier": 1},
 		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "steel": 3}, "min_tier": 1},
 		{"name": "Мортира", "scene": mortar_scene, "cost": {"steel": 8, "wood": 4}, "min_tier": 2},
 		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"steel": 12, "wood": 6}, "min_tier": 3},
-		{"name": "Генератор", "scene": generator_scene, "cost": {"steel": 10, "wood": 5}, "min_tier": 1},
 	]
 	_rebuild_ghost()
 
@@ -100,6 +102,12 @@ func try_place() -> bool:
 		print("CLAUDE: достигнут лимит генераторов (", MAX_GENERATORS, ")")
 		return false
 
+	# Мастерская нужна одна — второй верстак ставить незачем (Этап 4.30).
+	if buildable.name == "Мастерская" \
+			and not get_tree().get_nodes_in_group("workshop").is_empty():
+		print("CLAUDE: мастерская уже построена")
+		return false
+
 	var cost: Dictionary = buildable.cost
 	for resource_type in cost:
 		if InventorySystem.get_resource(resource_type) < cost[resource_type]:
@@ -142,7 +150,10 @@ func _get_target_position() -> Vector3:
 	return Vector3(snapped_x, 0.5, snapped_z)
 
 
-## Делаем копию стены полупрозрачной и убираем у неё столкновения/здоровье.
+## Делаем копию постройки полупрозрачной и убираем у неё столкновения/здоровье.
+## Label3D-подсказку у призрака прячем (на превью не должно висеть «подойдите
+## ближе»/HP). Не освобождаем — призрак ещё не в дереве (add_child отложен),
+## а free до входа в дерево чреват гонкой; visible=false достаточно.
 func _make_ghost(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mat := StandardMaterial3D.new()
@@ -152,5 +163,7 @@ func _make_ghost(node: Node) -> void:
 	if node is CollisionObject3D:
 		(node as CollisionObject3D).collision_layer = 0
 		(node as CollisionObject3D).collision_mask = 0
+	if node is Label3D:
+		(node as Label3D).visible = false
 	for child in node.get_children():
 		_make_ghost(child)

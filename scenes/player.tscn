@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/health_component.gd" id="2_health"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/mortar_turret.tscn" id="8_mortar"]
 [ext_resource type="PackedScene" path="res://scenes/gatling_turret.tscn" id="9_gatling"]
 [ext_resource type="PackedScene" path="res://scenes/generator.tscn" id="10_generator"]
+[ext_resource type="PackedScene" path="res://scenes/workshop.tscn" id="11_workshop"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.5
@@ -52,3 +53,4 @@ storage_scene = ExtResource("7_storage")
 mortar_scene = ExtResource("8_mortar")
 gatling_scene = ExtResource("9_gatling")
 generator_scene = ExtResource("10_generator")
+workshop_scene = ExtResource("11_workshop")
