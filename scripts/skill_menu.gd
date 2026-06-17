@@ -204,7 +204,8 @@ func _make_node(parent: Control, cx: int, cy: float, d: int) -> Dictionary:
 	root.add_child(btn)
 
 	return {"root": root, "btn": btn, "disc_fill": disc_fill, "ring": ring,
-			"icon": icon, "center": center, "lock": lock, "sb": sb, "badge_l": badge_l}
+			"icon": icon, "center": center, "lock": lock, "sb": sb,
+			"badge": badge, "badge_l": badge_l, "d": float(d)}
 
 
 func _add_tex(parent: Control, tex: Texture2D, size: Vector2, pos: Vector2) -> TextureRect:
@@ -252,6 +253,14 @@ func _style_node(node: Dictionary, color: Color, frac: float, ring_color: Color,
 	node.sb.border_color = badge_color
 	node.badge_l.text = badge_text
 	node.badge_l.modulate = badge_color if frac <= 0.001 else Color(0.97, 0.97, 0.98)
+	# Ширина pill-бейджа под текст (чтобы слова «выбрать»/«✓ выбран» влезали).
+	var f: Font = ThemeDB.fallback_font
+	var tw: float = f.get_string_size(badge_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x if f != null else 40.0
+	var bw: float = clampf(tw + 22.0, 44.0, 132.0)
+	var d: float = node.d
+	node.badge.size.x = bw
+	node.badge.position.x = (d - bw) / 2.0
+	node.badge_l.size.x = bw
 
 
 func _refresh() -> void:

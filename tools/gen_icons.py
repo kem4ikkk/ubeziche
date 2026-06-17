@@ -37,14 +37,32 @@ BRIGHT = 200       # выше — «белая карточка»
 DARK = 120         # ниже — линия контура
 
 
+def _ramp(p):
+    """Мягкий порог: превращает размытую маску в анти-алиас край (~ленту 40 ед.)."""
+    lo, hi = 108, 150
+    if p <= lo:
+        return 0
+    if p >= hi:
+        return 255
+    return int((p - lo) / (hi - lo) * 255)
+
+
 def _solid_silhouette(tile):
-    """RGB-плитка карточки → L-маска сплошного белого силуэта."""
+    """RGB-плитка карточки → L-маска сплошного белого силуэта с гладким краем.
+
+    Качество (борьба с «углами» от грубого ИИ-контура): работаем на ×2, контур
+    замыкаем морфологическим ЗАКРЫТИЕМ (Max→Min, без квадратного раздувания),
+    заливаем фон от краёв, затем размываем маску и прогоняем через мягкий порог
+    — край получается сглаженным, а не ступенчатым.
+    """
+    UP = 2
     L = tile.convert("L")
-    w, h = L.size
-    # Контур (тёмные пиксели), утолщаем, чтобы замкнуть разрывы рисунка.
+    w, h = L.size[0] * UP, L.size[1] * UP
+    L = L.resize((w, h), Image.LANCZOS)
+    # Контур (тёмные пиксели) → морфологическое закрытие (замкнуть разрывы,
+    # не утолщая силуэт и не «обрубая» углы квадратами).
     outline = L.point(lambda p: 255 if p < DARK else 0)
-    outline = outline.filter(ImageFilter.MaxFilter(7))
-    # Белый холст, на нём контур чёрным; заливаем фон от краёв красным.
+    outline = outline.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.MinFilter(3))
     base = Image.new("RGB", (w, h), (255, 255, 255))
     base.paste((0, 0, 0), mask=outline)
     seeds = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
@@ -54,7 +72,6 @@ def _solid_silhouette(tile):
             ImageDraw.floodfill(base, s, (255, 0, 60), thresh=40)
         except Exception:
             pass
-    # Силуэт = всё, что НЕ залитый фон (внутренняя область + контур).
     px = base.load()
     sil = Image.new("L", (w, h), 0)
     sp = sil.load()
@@ -63,8 +80,9 @@ def _solid_silhouette(tile):
             r, g, b = px[x, y]
             if not (r > 200 and g < 80 and b < 110):
                 sp[x, y] = 255
-    # Лёгкое сглаживание краёв.
-    return sil.filter(ImageFilter.GaussianBlur(0.6))
+    # Сглаживание края: размытие + мягкий порог (анти-алиас лента).
+    sil = sil.filter(ImageFilter.GaussianBlur(2.4)).point(_ramp)
+    return sil
 
 
 def extract_icons():
