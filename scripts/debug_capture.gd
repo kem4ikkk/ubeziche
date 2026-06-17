@@ -667,14 +667,14 @@ func _run_capture(args: PackedStringArray) -> void:
 		(player as Node3D).global_position = Vector3(-3, 1, 3)
 		await get_tree().create_timer(0.2).timeout
 
-		# Гейт: без навыка «Бой» нож не крафтится.
-		InventorySystem.combat_level = 0
+		# Гейт: без ветки «Бой» нож не крафтится.
+		InventorySystem.reset_run_progression()
 		var knife_locked: bool = not workshop_h.craft_knife()
-		print("  нож без навыка «Бой»: заблокирован=", knife_locked, " (ожидается true)")
-		# Поднимаем навыки и крафтим все три инструмента.
-		InventorySystem.combat_level = 1
-		InventorySystem.gather_level = 2
-		InventorySystem.engineer_level = 1
+		print("  нож без ветки «Бой»: заблокирован=", knife_locked, " (ожидается true)")
+		# Поднимаем ветки и крафтим все три инструмента (Бой 1 / Добыча 2 / Инженер 1).
+		InventorySystem.skill_levels["melee"] = 1
+		InventorySystem.skill_levels["gather"] = 2
+		InventorySystem.skill_levels["repair"] = 1
 		var k: bool = workshop_h.craft_knife()
 		var ia: bool = workshop_h.craft_improved_axe()
 		var hm: bool = workshop_h.craft_hammer()
@@ -705,7 +705,7 @@ func _run_capture(args: PackedStringArray) -> void:
 				player._repair_building(wall_h)
 				await get_tree().create_timer(0.1).timeout
 				print("  ремонт с молотом: HP ", hp_before_h, " → ", wall_h.health.current_health,
-						" (молот x2: +", (player.repair_amount + InventorySystem.engineer_level * 5.0) * 2.0, ")")
+						" (молот x2: +", player.repair_amount * (1.0 + 0.05 * InventorySystem.get_skill_level("repair")) * 2.0, ")")
 
 		# UI-меню мастерской (E) — переключение видимости.
 		var wsmenu := get_tree().get_first_node_in_group("workshop_menu")
@@ -776,23 +776,23 @@ func _run_capture(args: PackedStringArray) -> void:
 			get_tree().current_scene.add_child(z)
 			(z as Node3D).global_position = (player as Node3D).global_position + Vector3(0, 0.6, -1.5)
 			await get_tree().create_timer(0.1).timeout
-			# Баланс урона «Бой» (правка 2026-06-16): бонус снижен ×10 → ×4. На бое 0
-			# урон = база (25): зомби 30 HP переживает удар (30→5), дельта читается.
-			InventorySystem.combat_level = 0
+			# Баланс урона «Сила удара» (правка 2026-06-16): бонус снижен ×10 → ×4.
+			# На ур.0 урон = база (25): зомби 30 HP переживает удар (30→5), дельта читается.
+			InventorySystem.skill_levels["melee"] = 0
 			var zhp0: float = -1.0
 			if z.has_node("HealthComponent"):
 				zhp0 = (z.get_node("HealthComponent") as HealthComponent).current_health
 			player.swing_axe()
 			await get_tree().create_timer(0.1).timeout
 			if is_instance_valid(z) and z.has_node("HealthComponent"):
-				print("  удар топором по зомби (бой 0): HP ", zhp0, " → ",
+				print("  удар топором по зомби (Сила удара 0): HP ", zhp0, " → ",
 						(z.get_node("HealthComponent") as HealthComponent).current_health,
 						" (урон топора ", player.axe_damage, ")")
 			else:
-				print("  удар топором по зомби (бой 0): цель уничтожена (урон ", player.axe_damage, ")")
-			# Новый масштаб «Боя»: ближний урон на максималке (3) = база + 3×4 = 37
+				print("  удар топором по зомби (Сила удара 0): цель уничтожена (урон ", player.axe_damage, ")")
+			# Ближний урон на максималке (Сила удара 3) = база + 3×4 = 37
 			# (раньше 25 + 3×10 = 55 — топор сносил танка за 2 удара).
-			print("  ближний урон при бое 3 (новый баланс): ", player.axe_damage + 3 * 4.0,
+			print("  ближний урон при Сила удара 3: ", player.axe_damage + 3 * 4.0,
 					" (раньше было ", player.axe_damage + 3 * 10.0, ")")
 		_dump_state("ПОСЛЕ топора (4.21)")
 
@@ -807,13 +807,13 @@ func _run_capture(args: PackedStringArray) -> void:
 		var rtype: String = rnode.resource_type
 		var hits_total: int = rnode._hits_total
 		print("  запас узла (ударов): ", hits_total, " (ожидается 5..7)")
-		InventorySystem.gather_level = 1
+		InventorySystem.skill_levels["gather"] = 1
 		var got1: int = rnode.hit()
-		print("  удар (навык 1): +", got1, " (", rtype, "), осталось ударов ",
+		print("  удар (Сбор ур.1 → выход 2): +", got1, " (", rtype, "), осталось ударов ",
 				rnode._hits_remaining, "/", hits_total)
-		InventorySystem.gather_level = 3
+		InventorySystem.skill_levels["gather"] = 3
 		var got3: int = rnode.hit()
-		print("  удар (навык 3): +", got3, ", осталось ударов ", rnode._hits_remaining)
+		print("  удар (Сбор ур.3 → выход 4): +", got3, ", осталось ударов ", rnode._hits_remaining)
 		# Вычерпываем узел до конца — он ИСЧЕЗАЕТ и НЕ заменяется сразу (правка
 		# 2026-06-16): число узлов на карте НЕ фиксировано, новые «дозревают» позже.
 		var nodes_before: int = get_tree().get_nodes_in_group("resource_node").size()
@@ -841,7 +841,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		var cam := player.get_node_or_null("Camera3D")
 		var rnode2 := get_tree().get_first_node_in_group("resource_node")
 		if player is Node3D and cam != null and is_instance_valid(rnode2):
-			InventorySystem.gather_level = 2
+			InventorySystem.skill_levels["gather"] = 2
 			(player as Node3D).global_position = Vector3(20, 1, 20)
 			player.equip_axe()
 			await get_tree().create_timer(0.1).timeout
@@ -904,24 +904,23 @@ func _run_capture(args: PackedStringArray) -> void:
 		_dump_state("ПОСЛЕ стрельбы по зомби")
 
 	# 6.992) Навыки (Этап 4.23): очки (3 на старте, +1 за пережитую ночь),
-	# ветки Добыча/Бой/Инженер; меню по клавише N.
+	# узлы-навыки в ветках Бой/Добыча/Инженер; меню по клавише N.
 	if true:
 		print("CLAUDE: проверяю навыки (4.23)")
 		get_tree().paused = false
-		# Сброс к стартовому состоянию для чистоты замера.
-		InventorySystem.skill_points = 3
-		InventorySystem.gather_level = 1
-		InventorySystem.combat_level = 0
-		InventorySystem.engineer_level = 0
-		print("  старт: очки=", InventorySystem.skill_points, " Добыча=", InventorySystem.gather_level)
+		# Сброс к стартовому состоянию для чистоты замера (ничего не вкачано).
+		InventorySystem.reset_run_progression()
+		print("  старт: очки=", InventorySystem.skill_points, " (Сбор ур.",
+				InventorySystem.get_skill_level("gather"), ")")
 		InventorySystem.upgrade_skill("gather")
-		InventorySystem.upgrade_skill("combat")
+		InventorySystem.upgrade_skill("melee")
 		print("  после вложений: очки=", InventorySystem.skill_points,
-				" Добыча=", InventorySystem.gather_level, " Бой=", InventorySystem.combat_level)
+				" Сбор=", InventorySystem.get_skill_level("gather"),
+				" Сила удара=", InventorySystem.get_skill_level("melee"))
 		# Третье вложение тратит последнее очко, четвёртое не должно пройти.
-		InventorySystem.upgrade_skill("engineer")
-		var up_fail: bool = InventorySystem.upgrade_skill("engineer")
-		print("  очки=", InventorySystem.skill_points, " Инженер=", InventorySystem.engineer_level,
+		InventorySystem.upgrade_skill("repair")
+		var up_fail: bool = InventorySystem.upgrade_skill("repair")
+		print("  очки=", InventorySystem.skill_points, " Ремонт=", InventorySystem.get_skill_level("repair"),
 				" лишнее вложение прошло: ", up_fail)
 		# Очко за пережитую ночь.
 		EventBus.night_survived.emit()
@@ -940,54 +939,57 @@ func _run_capture(args: PackedStringArray) -> void:
 					sm.has_method("_unhandled_input"))
 		_dump_state("ПОСЛЕ навыков (4.23)")
 
-	# 6.9925) Классы и кросс-доступ (Этап 4.12a). Класс задаёт ветку/потолки и
-	# стат-бонусы (+HP бойца, +лимит добытчика, +урон турелей инженера); чужая
-	# ветка качается лишь на +1 сверх базы; сигнатурная способность — только своя.
+	# 6.9925) Классы и узлы-навыки (Этап 4.12). Класс выбирается отдельно и
+	# открывает сигнатуру своей ветки; стат-эффекты идут по уровню КОНКРЕТНОГО
+	# узла-навыка (vigor→HP, capacity→лимит, turret→урон турелей). Любой узел —
+	# до 3 независимо от класса; на старте всё на 0.
 	if is_instance_valid(player):
-		print("CLAUDE: проверяю классы (4.12a)")
+		print("CLAUDE: проверяю классы и навыки (4.12)")
 		var hc := player.get_node("HealthComponent") as HealthComponent
-		# --- Боец: своя ветка «Бой» до 3, чужая «Добыча» — лишь на +1 сверх базы.
+		# --- Боец: «Закалка» (vigor) до 3 → +45 HP; потолок узла держит на 3.
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("combat")
 		print("  класс=", InventorySystem.player_class, " (ожидается combat)")
 		var base_hp: float = hc.max_health
 		InventorySystem.skill_points = 9
-		InventorySystem.upgrade_skill("combat")
-		InventorySystem.upgrade_skill("combat")
-		InventorySystem.upgrade_skill("combat")
-		var combat_capped: bool = not InventorySystem.upgrade_skill("combat")
-		print("  Бой=", InventorySystem.combat_level, "/3, потолок держит=", combat_capped)
-		print("  макс HP бойца: ", base_hp, " → ", hc.max_health, " (ожидается +45 при Бой 3)")
-		# Любая ветка теперь до 3 независимо от класса (правка 2026-06-17).
+		InventorySystem.upgrade_skill("vigor")
+		InventorySystem.upgrade_skill("vigor")
+		InventorySystem.upgrade_skill("vigor")
+		var vigor_capped: bool = not InventorySystem.upgrade_skill("vigor")
+		print("  Закалка=", InventorySystem.get_skill_level("vigor"), "/3, потолок держит=", vigor_capped)
+		print("  макс HP бойца: ", base_hp, " → ", hc.max_health, " (ожидается +45 при Закалка 3)")
+		# Узел другой ветки тоже до 3 (каждый узел качается независимо).
 		InventorySystem.upgrade_skill("gather")
 		InventorySystem.upgrade_skill("gather")
-		print("  другая ветка «Добыча» до потолка: ур=", InventorySystem.gather_level,
+		InventorySystem.upgrade_skill("gather")
+		print("  узел «Сбор» (другая ветка) до потолка: ур=", InventorySystem.get_skill_level("gather"),
 				"/", InventorySystem.get_skill_cap("gather"), " (ожидается 3/3)")
 		var ab_combat: bool = InventorySystem.unlock_ability()
 		print("  Боец открыл Авиаудар: ", InventorySystem.has_airstrike,
 				" (unlock=", ab_combat, "); C4=", InventorySystem.has_c4, " (ожидается false)")
-		# --- Добытчик: +лимит ресурсов (40 + 20×ур.; на старте ур.1 → 60).
+		# --- Добытчик: «Запас» (capacity) +20 лимита/ур. На старте 0 → лимит 40.
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("gather")
 		var cap0: int = InventorySystem.get_resource_cap()
 		InventorySystem.skill_points = 9
-		InventorySystem.upgrade_skill("gather")
-		InventorySystem.upgrade_skill("gather")
-		print("  лимит ресурсов добытчика: ", cap0, " → ", InventorySystem.get_resource_cap(),
-				" (ожидается 60 → 100 при Добыча 1→3)")
-		# --- Инженер: +урон турелей (+10%/ур.) и право на C4.
+		InventorySystem.upgrade_skill("capacity")
+		InventorySystem.upgrade_skill("capacity")
+		InventorySystem.upgrade_skill("capacity")
+		print("  лимит ресурсов (Запас 0→3): ", cap0, " → ", InventorySystem.get_resource_cap(),
+				" (ожидается 40 → 100)")
+		# --- Инженер: «Турели» (turret) +5%/ур к урону турелей; право на C4.
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("engineer")
 		InventorySystem.skill_points = 9
-		InventorySystem.upgrade_skill("engineer")
-		InventorySystem.upgrade_skill("engineer")
-		var mult: float = 1.0 + 0.1 * InventorySystem.engineer_level
-		print("  множитель урона турели инженера: x", mult, " (ожидается x1.2 при Инженер 2)")
+		InventorySystem.upgrade_skill("turret")
+		InventorySystem.upgrade_skill("turret")
+		var mult: float = 1.0 + 0.05 * InventorySystem.get_skill_level("turret")
+		print("  множитель урона турели (Турели 2): x", mult, " (ожидается x1.1)")
 		InventorySystem.unlock_ability()
 		print("  Инженер открыл C4: ", InventorySystem.has_c4, " (ожидается true)")
 		# Сброс класса/навыков, чтобы не влиять на последующие секции прогона.
 		InventorySystem.reset_run_progression()
-		_dump_state("ПОСЛЕ классов (4.12a)")
+		_dump_state("ПОСЛЕ классов (4.12)")
 
 	# 6.9926) Способности классов (Этап 4.12b): Авиаудар (AoE), Костёр (хил),
 	# C4 (AoE по зомби + снос сегмента blastable, но НЕ обычной постройки).
@@ -1004,7 +1006,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("combat")
 		InventorySystem.skill_points = 9
-		InventorySystem.upgrade_skill("combat")
+		InventorySystem.upgrade_skill("melee")
 		InventorySystem.unlock_ability()
 		player.airstrike_delay = 0.2
 		var az := zsc2.instantiate()
@@ -1021,6 +1023,8 @@ func _run_capture(args: PackedStringArray) -> void:
 		# --- Ускорение (Добытчик, 4.12c): +25% скорости на время.
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("gather")
+		InventorySystem.skill_points = 9
+		InventorySystem.upgrade_skill("gather")
 		InventorySystem.unlock_ability()
 		player._sprint()
 		print("  Ускорение: активно=", player._sprint_timer > 0.0, ", кулдаун=", player._sprint_cd > 0.0,
@@ -1037,7 +1041,7 @@ func _run_capture(args: PackedStringArray) -> void:
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("engineer")
 		InventorySystem.skill_points = 9
-		InventorySystem.upgrade_skill("engineer")
+		InventorySystem.upgrade_skill("repair")
 		InventorySystem.unlock_ability()
 		InventorySystem.add_resource("wood", 50)
 		InventorySystem.add_resource("steel", 50)
@@ -1249,15 +1253,17 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  после входа в зону: game_over=", game_state.is_game_over, ", HUD итог: '", result_text, "'")
 		_dump_state("ПОСЛЕ эвакуации")
 
-	# 6.999) Финал: показываем графическое дерево навыков на снимке (Этап 4.12d).
+	# 6.999) Финал: показываем дерево навыков (узлы-иконки) на снимке.
 	if is_instance_valid(player):
 		InventorySystem.reset_run_progression()
 		InventorySystem.set_class("combat")
-		InventorySystem.skill_points = 9
-		InventorySystem.upgrade_skill("combat")   # Бой ур.2
-		InventorySystem.upgrade_skill("combat")
-		InventorySystem.unlock_ability()           # открыт Авиаудар
-		InventorySystem.upgrade_skill("gather")    # чужая ветка +1 (демонстрация лимита)
+		InventorySystem.skill_points = 12
+		InventorySystem.upgrade_skill("melee")     # Сила удара ур.2
+		InventorySystem.upgrade_skill("melee")
+		InventorySystem.upgrade_skill("vigor")     # Закалка ур.1
+		InventorySystem.unlock_ability()           # открыт Авиаудар (Боец)
+		InventorySystem.upgrade_skill("gather")    # узлы других веток — для наглядности
+		InventorySystem.upgrade_skill("repair")
 		var sm_show := get_tree().get_first_node_in_group("skill_menu")
 		if is_instance_valid(sm_show) and sm_show.has_method("toggle") and not sm_show.visible:
 			sm_show.toggle()

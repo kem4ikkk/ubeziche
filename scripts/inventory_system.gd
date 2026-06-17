@@ -39,40 +39,52 @@ var has_hammer: bool = false
 var has_knife: bool = false
 var has_improved_axe: bool = false
 
-# Навыки (Этап 4.23): очки и уровни веток. Как в оригинале (New Zombie Shelter,
-# меню по N): на старте 3 очка, +1 за каждую пережитую ночь. Очко тратится на
-# повышение уровня одной из веток в меню навыков (scenes/skill_menu.tscn).
+# Навыки (Этап 4.23): очки. Как в оригинале (New Zombie Shelter, меню по N):
+# на старте 3 очка, +1 за каждую пережитую ночь.
 signal skills_changed()
 
 var skill_points: int = 3
 
-# Ветка «Добыча» (Этап 4.22): сколько ресурса даёт один удар топором по узлу
-# (resource_pickup.gd: hit). База 1, прокачка 1→2→3. Выше навык — больше за удар.
-var gather_level: int = 1
-# Ветка «Бой»: бонус к урону топором в ближнем бою (player.gd: swing_axe).
-var combat_level: int = 0
-# Ветка «Инженер»: бонус к ремонту построек топором; открывает крафт
-# инструментов в мастерской (Этап 4.26).
-var engineer_level: int = 0
+# Узлы-навыки (правка 2026-06-17): каждая ветка — несколько ОТДЕЛЬНЫХ навыков со
+# своей иконкой и уровнем 1..3 (раньше ветка была одной общей цифрой, и игроку
+# было непонятно, что именно качается). Класс выбирается отдельно и открывает
+# сигнатуру (верхний узел) своей ветки. На СТАРТЕ всё на 0 — ничего не вкачано.
+#
+# Реестр навыков: id → {branch, name, icon}. Порядок здесь = порядок в ветке
+# (первым идёт НИЖНИЙ узел, над «выбором класса»). Эффект каждого навыка
+# применяется ПО ЕГО УРОВНЮ в соответствующем потребителе:
+#   melee    — урон топора по зомби (player.swing_axe):       +4/ур.
+#   vigor    — макс HP (player._apply_combat_hp):              +15/ур.
+#   gather   — ресурса за удар (resource_pickup.hit):  база 1 +1/ур → 2/3/4.
+#   capacity — лимит дерева/стали (get_resource_cap):         +20/ур.
+#   repair   — % к ремонту построек (player._repair_building): +5%/ур.
+#   turret   — % к урону турелей (turret._try_fire):          +5%/ур.
+const SKILLS := {
+	"melee":    {"branch": "combat",   "name": "Сила удара", "icon": "sword"},
+	"vigor":    {"branch": "combat",   "name": "Закалка",    "icon": "heart"},
+	"gather":   {"branch": "gather",   "name": "Сбор",       "icon": "pickaxe"},
+	"capacity": {"branch": "gather",   "name": "Запас",      "icon": "backpack"},
+	"repair":   {"branch": "engineer", "name": "Ремонт",     "icon": "hammer"},
+	"turret":   {"branch": "engineer", "name": "Турели",     "icon": "turret"},
+}
+const SKILL_MAX_LEVEL := 3
 
-# Максимальные уровни веток (стоимость уровня — 1 очко).
-const SKILL_MAX := {"gather": 3, "combat": 3, "engineer": 3}
+var skill_levels: Dictionary = {
+	"melee": 0, "vigor": 0, "gather": 0, "capacity": 0, "repair": 0, "turret": 0,
+}
 
 # Класс игрока (Этап 4.12). Один из "combat"/"gather"/"engineer"; "" — ещё не
-# выбран (класс выбирается в меню навыков N / skill_menu; стартового попапа нет, 4.12c).
+# выбран (класс выбирается в меню навыков N). Класс определяет ТОЛЬКО сигнатурную
+# способность (верхний узел своей ветки, клавиша F).
 signal class_changed(player_class: String)
 var player_class: String = ""
 
-# Прокачка веток (правка 2026-06-17): ВСЕ ветки качаются до SKILL_MAX (3)
-# независимо от класса (раньше чужие были ограничены — автор попросил доводить
-# любую ветку до 3). Класс теперь определяет ТОЛЬКО сигнатурную способность F
-# (unlock_ability). Стат-бонусы веток применяются по уровню ветки, не по классу.
-
-# Сигнатурные способности (Этап 4.12): открываются узлом своей ветки за очко.
-# Эффект подключается в 4.12b (player.gd, клавиша F). Здесь — только состояние.
-var has_airstrike: bool = false   # Боец
-var has_sprint: bool = false      # Добытчик (Ускорение, Этап 4.12c — вместо Костра)
-var has_c4: bool = false          # Инженер (право крафтить C4)
+# Сигнатурные способности (Этап 4.12): открываются узлом своей ветки за очко
+# (нужен выбранный класс + хотя бы 1 вложенное очко в свою ветку). Эффект — в
+# player.gd (клавиша F). Здесь — только состояние.
+var has_airstrike: bool = false   # Боец — Авиаудар
+var has_sprint: bool = false      # Добытчик — Ускорение
+var has_c4: bool = false          # Инженер — право крафтить C4
 var c4_charges: int = 0           # сколько зарядов C4 в наличии (крафт в мастерской)
 
 
@@ -102,10 +114,14 @@ func add_resource(resource_type: String, amount: int) -> void:
 	inventory_changed.emit(inventory)
 
 
-## Лимит дерева/стали: базовый + бонус по уровню ветки «Добыча» (+20 за уровень,
-## правка 2026-06-17 — по уровню ветки, не по классу).
+## Лимит дерева/стали: базовый + навык «Запас» (capacity, +20 за уровень).
 func get_resource_cap() -> int:
-	return RESOURCE_CAP + 20 * gather_level
+	return RESOURCE_CAP + 20 * int(skill_levels.get("capacity", 0))
+
+
+## Сколько ресурса даёт один удар топором по узлу: база 1 + уровень навыка «Сбор».
+func gather_yield() -> int:
+	return 1 + int(skill_levels.get("gather", 0))
 
 
 ## Использовать ресурсы для крафта (возвращает true если достаточно).
@@ -148,31 +164,34 @@ func set_tier(new_tier: int) -> void:
 	tier_changed.emit(shelter_tier)
 
 
-## Текущий уровень ветки навыка (Этап 4.23).
-func get_skill_level(branch: String) -> int:
-	match branch:
-		"gather": return gather_level
-		"combat": return combat_level
-		"engineer": return engineer_level
-	return 0
+## Текущий уровень узла-навыка по его id (melee/vigor/gather/capacity/repair/turret).
+func get_skill_level(skill_id: String) -> int:
+	return int(skill_levels.get(skill_id, 0))
 
 
-## Повысить ветку навыка за 1 очко (Этап 4.23). Возвращает true при успехе.
-func upgrade_skill(branch: String) -> bool:
-	if not SKILL_MAX.has(branch):
+## Сколько всего очков вложено в ветку (сумма уровней её узлов). Нужно для ворот
+## сигнатурной способности (≥1) и для подписи ветки в меню.
+func get_branch_level(branch: String) -> int:
+	var total := 0
+	for id in SKILLS:
+		if SKILLS[id].branch == branch:
+			total += int(skill_levels.get(id, 0))
+	return total
+
+
+## Поднять узел-навык на 1 уровень за 1 очко. Возвращает true при успехе.
+func upgrade_skill(skill_id: String) -> bool:
+	if not SKILLS.has(skill_id):
 		return false
 	if skill_points <= 0:
 		print("Навыки: нет свободных очков")
 		return false
-	if get_skill_level(branch) >= get_skill_cap(branch):
-		print("Навыки: ветка «", branch, "» на потолке (", get_skill_cap(branch), ")")
+	if int(skill_levels.get(skill_id, 0)) >= SKILL_MAX_LEVEL:
+		print("Навыки: «", skill_id, "» на потолке (", SKILL_MAX_LEVEL, ")")
 		return false
 	skill_points -= 1
-	match branch:
-		"gather": gather_level += 1
-		"combat": combat_level += 1
-		"engineer": engineer_level += 1
-	print("Навыки: ветка «", branch, "» повышена до ", get_skill_level(branch),
+	skill_levels[skill_id] = int(skill_levels.get(skill_id, 0)) + 1
+	print("Навыки: «", skill_id, "» → ур.", skill_levels[skill_id],
 			" (осталось очков: ", skill_points, ")")
 	skills_changed.emit()
 	return true
@@ -185,10 +204,9 @@ func add_skill_point(amount: int = 1) -> void:
 	skills_changed.emit()
 
 
-## Потолок ветки: SKILL_MAX (3) для любой ветки (правка 2026-06-17 — без
-## ограничения чужих веток; класс влияет только на сигнатурную способность).
-func get_skill_cap(branch: String) -> int:
-	return SKILL_MAX.get(branch, 0)
+## Потолок любого узла-навыка — SKILL_MAX_LEVEL (3).
+func get_skill_cap(_skill_id: String = "") -> int:
+	return SKILL_MAX_LEVEL
 
 
 ## Выбрать класс игрока (Этап 4.12). Вызывается экраном выбора класса один раз
@@ -216,7 +234,7 @@ func ability_unlocked() -> bool:
 func unlock_ability() -> bool:
 	if player_class == "" or ability_unlocked():
 		return false
-	if get_skill_level(player_class) < 1:
+	if get_branch_level(player_class) < 1:
 		print("Навыки: сначала вложите очко в свою ветку")
 		return false
 	if skill_points <= 0:
@@ -238,9 +256,8 @@ func unlock_ability() -> bool:
 func reset_run_progression() -> void:
 	player_class = ""
 	skill_points = 3
-	gather_level = 1
-	combat_level = 0
-	engineer_level = 0
+	for id in skill_levels:
+		skill_levels[id] = 0          # на старте ничего не вкачано
 	has_airstrike = false
 	has_sprint = false
 	has_c4 = false

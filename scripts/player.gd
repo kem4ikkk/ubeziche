@@ -437,7 +437,7 @@ func swing_axe() -> void:
 			# Урон = база + ветка «Бой» + Нож. Бонус «Боя» снижен с ×10 до ×4
 			# (правка 2026-06-16): на ×10 ближний бой стал слишком сильным —
 			# на бое 3 топор сносил обычного зомби с одного удара, танка за два.
-			var dmg := axe_damage + InventorySystem.combat_level * 4.0
+			var dmg := axe_damage + InventorySystem.get_skill_level("melee") * 4.0
 			if InventorySystem.has_knife:
 				dmg += 10.0
 			target.take_damage(dmg)
@@ -499,8 +499,8 @@ func _repair_building(node: Node) -> void:
 	if node.has_method("is_full_health") and node.is_full_health():
 		print("CLAUDE: постройка уже на максимум HP")
 		return
-	# Ветка «Инженер» (Этап 4.23) добавляет HP к ремонту, молот удваивает итог.
-	var amount := repair_amount + InventorySystem.engineer_level * 5.0
+	# Навык «Ремонт» (Инженер) добавляет +5% HP за уровень, молот удваивает итог.
+	var amount := repair_amount * (1.0 + 0.05 * InventorySystem.get_skill_level("repair"))
 	if InventorySystem.has_hammer:
 		amount *= 2.0
 	node.repair(amount)
@@ -607,12 +607,12 @@ func _aim_ground_point(max_dist: float) -> Vector3:
 	return to
 
 
-## Макс HP = база + 15 за уровень ветки «Бой» (правка 2026-06-17: по уровню ветки,
-## не по классу). При росте максимума подлечиваем на дельту.
+## Макс HP = база + 15 за уровень навыка «Закалка» (vigor). При росте максимума
+## подлечиваем на дельту.
 func _apply_combat_hp() -> void:
 	if not is_instance_valid(health):
 		return
-	var bonus: float = 15.0 * InventorySystem.combat_level
+	var bonus: float = 15.0 * InventorySystem.get_skill_level("vigor")
 	var new_max: float = _base_max_health + bonus
 	var delta: float = new_max - health.max_health
 	health.max_health = new_max

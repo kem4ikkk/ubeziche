@@ -143,8 +143,8 @@ func _craft_tool(tool: String) -> bool:
 	if InventorySystem.get(spec.flag):
 		print("Мастерская: «", spec.title, "» уже скрафчен")
 		return false
-	if InventorySystem.get_skill_level(spec.branch) < spec.req_level:
-		print("Мастерская: «", spec.title, "» требует навык «", spec.branch, "» уровня ", spec.req_level)
+	if InventorySystem.get_branch_level(spec.branch) < spec.req_level:
+		print("Мастерская: «", spec.title, "» требует ветку «", spec.branch, "» уровня ", spec.req_level)
 		return false
 	var cost: Dictionary = spec.cost
 	if InventorySystem.get_resource("wood") < cost.wood \

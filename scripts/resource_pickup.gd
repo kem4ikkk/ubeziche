@@ -68,7 +68,7 @@ func _ready() -> void:
 func hit() -> int:
 	if not harvestable or _depleted:
 		return 0
-	var got: int = maxi(1, InventorySystem.gather_level)
+	var got: int = InventorySystem.gather_yield()   # база 1 + навык «Сбор»
 	InventorySystem.add_resource(resource_type, got)
 	_hits_remaining -= 1
 	_update_visual()
