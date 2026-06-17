@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Обработка листа иконок автора + вспомогательные текстуры для дерева навыков.
+"""Ассеты дерева навыков: СПЛОШНЫЕ белые силуэты-иконки из листа автора +
+круглые диски/кольца/замок для узлов (вид по референсу автора).
 
-1) Источник: лист 3x3 (Downloads/Gemini_Generated_Image_...png) — карточки с
-   чёрным контуром на белом фоне, сама сетка на сером фоне. Для каждой ячейки:
-   находим яркую (белую) карточку → обрезаем по ней → конвертируем контур в
-   БЕЛЫЙ силуэт на прозрачном фоне (тёмная линия = непрозрачно, светлый фон =
-   прозрачно) → центрируем в квадратном холсте. Результат — assets/icons/*.png
-   (имена как раньше, так что skill_menu.gd не меняется).
-2) Вспомогательные текстуры для круглых узлов дерева: circle_mask.png (сплошной
-   круг — под радиальную заливку TextureProgressBar) и lock.png (замок —
-   для недоступных узлов).
+Иконки: лист 3x3 (Downloads/Gemini_Generated_Image_...png) — чёрный контур на
+белой карточке, карточки на сером фоне. Для каждой ячейки: находим белую
+карточку по яркости и обрезаем по ней → строим СПЛОШНОЙ силуэт: утолщаем
+контур (замыкая разрывы), заливаем фон от краёв (flood fill), всё, что не фон,
+= силуэт (контур + внутренняя область) → белый силуэт на прозрачном фоне.
+Сплошная заливка читается чётче тонкого контура и совпадает со стилем
+референса (белые глифы на цветных кружках).
+
+Круги/кольца/замок — для круглых узлов: диск (сплошной) тонируется цветом
+ветки через modulate, кольцо — обводка, замок — бейдж недоступности.
 
 Запуск (разово): python tools/gen_icons.py
 Инструмент сборки ассетов — в самой игре Python не используется.
 """
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets", "icons")
@@ -23,17 +25,46 @@ os.makedirs(OUT, exist_ok=True)
 
 SRC = r"C:\Users\kemal\Downloads\Gemini_Generated_Image_d26rhed26rhed26r.png"
 
-# Порядок ячеек 3x3 (слева-вправо, сверху-вниз) → имя файла иконки.
 ORDER = [
     "backpack", "c4", "hammer",
     "heart", "pickaxe", "sprint",
     "sword", "turret", "airstrike",
 ]
 
-CANVAS = 220        # итоговый квадратный холст под иконку
-MARGIN = 0.13        # доля холста, оставляемая пустой по краям
-BRIGHT_THRESHOLD = 200   # выше — считаем «карточка» (белый фон листа)
-ALPHA_CUTOFF = 205       # выше — прозрачно; ниже — контур проявляется
+CANVAS = 224
+MARGIN = 0.14
+BRIGHT = 200       # выше — «белая карточка»
+DARK = 120         # ниже — линия контура
+
+
+def _solid_silhouette(tile):
+    """RGB-плитка карточки → L-маска сплошного белого силуэта."""
+    L = tile.convert("L")
+    w, h = L.size
+    # Контур (тёмные пиксели), утолщаем, чтобы замкнуть разрывы рисунка.
+    outline = L.point(lambda p: 255 if p < DARK else 0)
+    outline = outline.filter(ImageFilter.MaxFilter(7))
+    # Белый холст, на нём контур чёрным; заливаем фон от краёв красным.
+    base = Image.new("RGB", (w, h), (255, 255, 255))
+    base.paste((0, 0, 0), mask=outline)
+    seeds = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
+             (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]
+    for s in seeds:
+        try:
+            ImageDraw.floodfill(base, s, (255, 0, 60), thresh=40)
+        except Exception:
+            pass
+    # Силуэт = всё, что НЕ залитый фон (внутренняя область + контур).
+    px = base.load()
+    sil = Image.new("L", (w, h), 0)
+    sp = sil.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            if not (r > 200 and g < 80 and b < 110):
+                sp[x, y] = 255
+    # Лёгкое сглаживание краёв.
+    return sil.filter(ImageFilter.GaussianBlur(0.6))
 
 
 def extract_icons():
@@ -45,69 +76,67 @@ def extract_icons():
         for c in range(3):
             cell = sheet.crop((c * cw, r * ch, (c + 1) * cw, (r + 1) * ch))
             gray = cell.convert("L")
-            bright = gray.point(lambda p: 255 if p > BRIGHT_THRESHOLD else 0)
+            bright = gray.point(lambda p: 255 if p > BRIGHT else 0)
             bbox = bright.getbbox()
             if bbox:
                 x0, y0, x1, y1 = bbox
-                inset = 4
-                x0, y0 = x0 + inset, y0 + inset
-                x1, y1 = max(x0 + 1, x1 - inset), max(y0 + 1, y1 - inset)
-                cell = cell.crop((x0, y0, x1, y1))
-            L = cell.convert("L")
-
-            def alpha_fn(p, cutoff=ALPHA_CUTOFF):
-                v = cutoff - p
-                if v < 0:
-                    return 0
-                v = int(v / cutoff * 255)
-                return 255 if v > 255 else v
-
-            alpha = L.point(alpha_fn)
-            white = Image.new("RGBA", cell.size, (255, 255, 255, 0))
-            white.putalpha(alpha)
-            stroke_bbox = alpha.point(lambda p: 255 if p > 10 else 0).getbbox()
-            if stroke_bbox:
-                white = white.crop(stroke_bbox)
-
+                ins = 6
+                cell = cell.crop((x0 + ins, y0 + ins, max(x0 + 7, x1 - ins), max(y0 + 7, y1 - ins)))
+            sil = _solid_silhouette(cell)
+            sbox = sil.point(lambda p: 255 if p > 30 else 0).getbbox()
+            if sbox:
+                sil = sil.crop(sbox)
+            # Белый силуэт по маске альфы.
+            icon = Image.new("RGBA", sil.size, (255, 255, 255, 0))
+            icon.putalpha(sil)
             max_dim = int(CANVAS * (1 - 2 * MARGIN))
-            sw, sh = white.size
+            sw, sh = icon.size
             scale = min(max_dim / sw, max_dim / sh)
             nw, nh = max(1, int(sw * scale)), max(1, int(sh * scale))
-            resized = white.resize((nw, nh), Image.LANCZOS)
+            icon = icon.resize((nw, nh), Image.LANCZOS)
             canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-            canvas.alpha_composite(resized, ((CANVAS - nw) // 2, (CANVAS - nh) // 2))
+            canvas.alpha_composite(icon, ((CANVAS - nw) // 2, (CANVAS - nh) // 2))
             canvas.save(os.path.join(OUT, ORDER[idx] + ".png"))
             idx += 1
 
 
-def gen_circle(size):
-    # TextureProgressBar требует текстуру РОВНО нужного размера: похоже, она
-    # навязывает минимальный размер control = размеру текстуры (в отличие от
-    # TextureRect, у которого EXPAND_IGNORE_SIZE это игнорирует) — поэтому
-    # генерируем круг под каждый диаметр узла отдельно, а не один большой.
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+def _disc(size):
+    S = 4
+    n = size * S
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    ImageDraw.Draw(img).ellipse([0, 0, n - 1, n - 1], fill=(255, 255, 255, 255))
+    img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, "disc_%d.png" % size))
+
+
+def _ring(size, thick):
+    S = 4
+    n = size * S
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    pad = max(1, size // 64)
-    d.ellipse([pad, pad, size - pad, size - pad], fill=(255, 255, 255, 255))
-    img.save(os.path.join(OUT, "circle_%d.png" % size))
+    d.ellipse([0, 0, n - 1, n - 1], fill=(255, 255, 255, 255))
+    t = thick * S
+    d.ellipse([t, t, n - 1 - t, n - 1 - t], fill=(0, 0, 0, 0))
+    img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, "ring_%d.png" % size))
 
 
-def gen_lock():
-    s = 256
+def _lock():
+    S = 4
+    s = 64 * S
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.arc([68, 38, 188, 168], start=180, end=360, fill=(255, 255, 255, 255), width=24)
-    d.rounded_rectangle([54, 118, 202, 222], radius=20, fill=(255, 255, 255, 255))
-    d.ellipse([113, 148, 143, 178], fill=(0, 0, 0, 0))
-    d.rectangle([121, 168, 135, 202], fill=(0, 0, 0, 0))
-    img.save(os.path.join(OUT, "lock.png"))
+    d.arc([18 * S, 8 * S, 46 * S, 40 * S], 180, 360, fill=(255, 255, 255, 255), width=6 * S)
+    d.rounded_rectangle([13 * S, 28 * S, 51 * S, 56 * S], radius=6 * S, fill=(255, 255, 255, 255))
+    d.ellipse([28 * S, 36 * S, 36 * S, 44 * S], fill=(0, 0, 0, 0))
+    d.rectangle([30 * S, 40 * S, 34 * S, 50 * S], fill=(0, 0, 0, 0))
+    img.resize((64, 64), Image.LANCZOS).save(os.path.join(OUT, "lock.png"))
 
 
 def main():
     extract_icons()
-    gen_circle(84)
-    gen_circle(104)
-    gen_lock()
+    for sz in (58, 76):
+        _disc(sz)
+        _ring(sz, 4)
+    _lock()
     print("Готово:", OUT)
     for f in sorted(os.listdir(OUT)):
         if f.endswith(".png"):
