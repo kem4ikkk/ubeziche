@@ -1,25 +1,34 @@
 extends CanvasLayer
 
-## Дерево навыков (Этап 4.40 — полные деревья оригинала, «ёлочка»). Сетка 3×4 как
-## в оригинале: колонки-ветки Сражение/Выживание/Технология, ряды «Уровень 1..4».
-## Ряд1 = tier1 (3 узла), ряд2 = [tier2[0], МАСТЕРСТВО(центр), tier2[1]],
-## ряд3 = tier3 (3), ряд4 = ультимейт (центр). Гейты-ёлочка: открыл любой tier1 до
-## макс. → мастерство (выбор класса); мастерство до макс. → tier2; любой tier2 →
-## tier3; любой tier3 → ультимейт. Закрытые узлы — с замком. Узлы: glow + тёмный
-## диск + заливка цветом по уровню + кольцо + иконка + pill-бейдж; путь к узлу
-## горит цветом ветки, когда узел открыт. Заливка/glow анимируются.
+## Дерево навыков (Этап 4.40 — полные деревья оригинала, «ёлочка»). Колонки-ветки
+## Сражение/Выживание/Технология. Дерево ПЕРЕВЁРНУТО (правка автора): СТАРТ (Ур.1)
+## — ВНИЗУ, ультимейт — ВВЕРХУ, как настоящее дерево. 5 рядов снизу вверх:
+## Ур.1 = tier1 (3 узла) → МАСТЕРСТВО (1 узел, ОТДЕЛЬНЫЙ ряд = выбор класса) →
+## Ур.2 = tier2 (2 узла) → Ур.3 = tier3 (3) → Ур.4 = ультимейт (1). Гейты: открыл
+## любой tier1 до макс. → мастерство; мастерство до макс. → ВЕСЬ ряд tier2; любой
+## tier2 → ВЕСЬ ряд tier3; любой tier3 → ультимейт. Так каждый следующий ряд
+## открывается ЦЕЛИКОМ. Закрытые узлы — с замком. Узлы: glow + диск + заливка
+## цветом по уровню + кольцо + иконка + pill-бейдж; путь горит цветом ветки,
+## когда узел-назначение открыт. Заливка/glow анимируются.
 
 const ICON_DIR := "res://assets/icons/"
 const SMALL_D := 52
 const BIG_D := 72
-const SUB := 62                       # смещение колонок ветки от её центра
+const SUB := 64                       # смещение колонок ветки от её центра
 const COL_X := [150, 380, 610]
-const ROW_Y := [150.0, 250.0, 350.0, 452.0]   # Уровень 1 (верх) .. 4 (низ)
+# Дерево перевёрнуто: СТАРТ (Ур.1) — ВНИЗУ, ультимейт — ВВЕРХУ. 5 рядов сверху
+# вниз: ультимейт, tier3, tier2, мастерство, tier1. Мастерство — отдельный ряд,
+# чтобы ряд tier2 открывался целиком.
+const ROW_ULT := 120.0
+const ROW_T3 := 203.0
+const ROW_T2 := 286.0
+const ROW_MAS := 369.0
+const ROW_T1 := 452.0
 
 const BG := Color(0.055, 0.063, 0.078)
-const NODE_DARK := Color(0.115, 0.13, 0.157)
+const NODE_DARK := Color(0.16, 0.178, 0.214)
 const PATH_GRAY := Color(0.165, 0.18, 0.212)
-const RING_GRAY := Color(0.30, 0.32, 0.37)
+const RING_GRAY := Color(0.37, 0.395, 0.45)
 const TXT := Color(0.91, 0.918, 0.93)
 const TXT_MUTED := Color(0.54, 0.565, 0.61)
 const BADGE_BG := Color(0.08, 0.09, 0.11)
@@ -71,10 +80,17 @@ func _build_tree() -> void:
 	title.text = "ДЕРЕВО НАВЫКОВ"
 	title.add_theme_font_size_override("font_size", 20)
 
-	# Подписи уровней слева.
-	for r in 4:
-		var rl := _make_label(tree, 4, ROW_Y[r] - 9, 64, 18)
-		rl.text = "Ур. %d" % (r + 1)
+	# Подписи рядов слева (дерево перевёрнуто: Ур.1 внизу → ультимейт вверху).
+	var row_labels := [
+		{"y": ROW_T1, "t": "Ур. 1"},
+		{"y": ROW_MAS, "t": "Мастер."},
+		{"y": ROW_T2, "t": "Ур. 2"},
+		{"y": ROW_T3, "t": "Ур. 3"},
+		{"y": ROW_ULT, "t": "Ур. 4"},
+	]
+	for rl_data in row_labels:
+		var rl := _make_label(tree, 4, rl_data.y - 9, 64, 18)
+		rl.text = rl_data.t
 		rl.modulate = TXT_MUTED
 		rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		rl.add_theme_font_size_override("font_size", 11)
@@ -88,25 +104,30 @@ func _build_tree() -> void:
 		var c2 := x + SUB
 
 		var pos := {}
-		pos[data.tier1[0]] = Vector2(c0, ROW_Y[0])
-		pos[data.tier1[1]] = Vector2(x, ROW_Y[0])
-		pos[data.tier1[2]] = Vector2(c2, ROW_Y[0])
-		pos[data.tier2[0]] = Vector2(c0, ROW_Y[1])
-		pos[data.mastery] = Vector2(x, ROW_Y[1])
-		pos[data.tier2[1]] = Vector2(c2, ROW_Y[1])
-		pos[data.tier3[0]] = Vector2(c0, ROW_Y[2])
-		pos[data.tier3[1]] = Vector2(x, ROW_Y[2])
-		pos[data.tier3[2]] = Vector2(c2, ROW_Y[2])
-		pos[data.ultimate] = Vector2(x, ROW_Y[3])
+		pos[data.tier1[0]] = Vector2(c0, ROW_T1)
+		pos[data.tier1[1]] = Vector2(x, ROW_T1)
+		pos[data.tier1[2]] = Vector2(c2, ROW_T1)
+		pos[data.mastery] = Vector2(x, ROW_MAS)
+		pos[data.tier2[0]] = Vector2(c0, ROW_T2)
+		pos[data.tier2[1]] = Vector2(c2, ROW_T2)
+		pos[data.tier3[0]] = Vector2(c0, ROW_T3)
+		pos[data.tier3[1]] = Vector2(x, ROW_T3)
+		pos[data.tier3[2]] = Vector2(c2, ROW_T3)
+		pos[data.ultimate] = Vector2(x, ROW_ULT)
 
-		# Пути (вертикальные по колонкам; горят, когда узел-назначение открыт).
-		_paths.append({"line": _make_line(tree, pos[data.tier1[0]], pos[data.tier2[0]]), "upper": data.tier2[0]})
+		# Пути «ёлочки» снизу вверх (горят цветом ветки, когда узел-назначение
+		# открыт): tier1 → мастерство (3 сходятся) → tier2 (2 ветвятся) →
+		# tier3 (X в центр) → ультимейт (3 сходятся).
+		for n0 in data.tier1:
+			_paths.append({"line": _make_line(tree, pos[n0], pos[data.mastery]), "upper": data.mastery})
+		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier2[0]]), "upper": data.tier2[0]})
+		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier2[1]]), "upper": data.tier2[1]})
 		_paths.append({"line": _make_line(tree, pos[data.tier2[0]], pos[data.tier3[0]]), "upper": data.tier3[0]})
-		_paths.append({"line": _make_line(tree, pos[data.tier1[1]], pos[data.mastery]), "upper": data.mastery})
-		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier3[1]]), "upper": data.tier3[1]})
-		_paths.append({"line": _make_line(tree, pos[data.tier3[1]], pos[data.ultimate]), "upper": data.ultimate})
-		_paths.append({"line": _make_line(tree, pos[data.tier1[2]], pos[data.tier2[1]]), "upper": data.tier2[1]})
+		_paths.append({"line": _make_line(tree, pos[data.tier2[0]], pos[data.tier3[1]]), "upper": data.tier3[1]})
+		_paths.append({"line": _make_line(tree, pos[data.tier2[1]], pos[data.tier3[1]]), "upper": data.tier3[1]})
 		_paths.append({"line": _make_line(tree, pos[data.tier2[1]], pos[data.tier3[2]]), "upper": data.tier3[2]})
+		for n3 in data.tier3:
+			_paths.append({"line": _make_line(tree, pos[n3], pos[data.ultimate]), "upper": data.ultimate})
 
 		# Заголовок ветки + счётчик вложенного.
 		var head := _make_label(tree, x - 110, 42, 220, 22)
@@ -124,7 +145,7 @@ func _build_tree() -> void:
 	var hint := _make_label(tree, 0, 538, 760, 20)
 	hint.modulate = TXT_MUTED
 	hint.add_theme_font_size_override("font_size", 12)
-	hint.text = "клик — вложить очко · следующий узел открыт, когда нижний прокачан до конца · N — закрыть"
+	hint.text = "клик — вложить очко · ряд выше открывается целиком, когда нижний прокачан до макс. · N — закрыть"
 
 
 func _add_node(parent: Control, id: String, center: Vector2, d: int, color: Color) -> void:
