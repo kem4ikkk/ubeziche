@@ -62,14 +62,14 @@ func _rebuild() -> void:
 	for key in ws.TOOL_KEYS:
 		var spec: Dictionary = ws.get_tool_spec(key)
 		var owned: bool = InventorySystem.get(spec.flag)
-		var locked: bool = InventorySystem.get_skill_level(spec.branch) < spec.req_level
+		var locked: bool = InventorySystem.player_class != spec.branch
 		var label: String
 		if owned:
 			label = "%s — скрафчен ✓" % spec.title
 		else:
-			label = "%s (%d дерева, %d стали) — навык «%s» ур.%d%s" % [
+			label = "%s (%d дерева, %d стали) — мастерство «%s»%s" % [
 					spec.title, spec.cost.wood, spec.cost.steel,
-					BRANCH_NAME.get(spec.branch, spec.branch), spec.req_level,
+					BRANCH_NAME.get(spec.branch, spec.branch),
 					"  🔒" if locked else ""]
 		_add_button(label, owned or locked, func() -> void: ws.craft_tool(key); _rebuild())
 	# C4 (Этап 4.12b) — только Инженеру с открытой способностью C4.

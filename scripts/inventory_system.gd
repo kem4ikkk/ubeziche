@@ -39,59 +39,114 @@ var has_hammer: bool = false
 var has_knife: bool = false
 var has_improved_axe: bool = false
 
-# Навыки (Этап 4.23): очки. Как в оригинале (New Zombie Shelter, меню по N):
-# на старте 3 очка, +1 за каждую пережитую ночь.
+# Навыки (Этап 4.23 → 4.40, полные деревья оригинала). Очки: на старте 3, +1 за
+# пережитую ночь. Меню по N.
 signal skills_changed()
 
 var skill_points: int = 3
 
-# Узлы-навыки (правка 2026-06-17): каждая ветка — несколько ОТДЕЛЬНЫХ навыков со
-# своей иконкой и уровнем 1..3 (раньше ветка была одной общей цифрой, и игроку
-# было непонятно, что именно качается). Класс выбирается отдельно и открывает
-# сигнатуру (верхний узел) своей ветки. На СТАРТЕ всё на 0 — ничего не вкачано.
-#
-# Реестр навыков: id → {branch, name, icon}. Порядок здесь = порядок в ветке
-# (первым идёт НИЖНИЙ узел, над «выбором класса»). Эффект каждого навыка
-# применяется ПО ЕГО УРОВНЮ в соответствующем потребителе:
-#   melee    — урон топора по зомби (player.swing_axe):       +4/ур.
-#   vigor    — макс HP (player._apply_combat_hp):              +15/ур.
-#   gather   — ресурса за удар (resource_pickup.hit):  база 1 +1/ур → 2/3/4.
-#   capacity — лимит дерева/стали (get_resource_cap):         +20/ур.
-#   repair   — % к ремонту построек (player._repair_building): +5%/ур.
-#   turret   — % к урону турелей (turret._try_fire):          +5%/ур.
+# ПОЛНЫЕ ДЕРЕВЬЯ НАВЫКОВ (по оригиналу New Zombie Shelter, Этап 4.40). Каждая
+# ветка = 3 вертикальные ЦЕПОЧКИ (колонки) по 3 узла (тиры 1..3) + ультимейт
+# (тир 4). ПРАВИЛО: узел открывается, когда узел НИЖЕ в его колонке прокачан до
+# своего максимума («предыдущая до 3»). КЛАСС выбирается на узле «мастерство»
+# (средняя колонка, тир 2) — взяв одну мастерскую ветку, другие классы закрыты.
+# Ультимейт ветки открывается после выбора её класса.
+const SKILL_MAX_LEVEL := 3      # дефолтный потолок узла (если у узла нет своего "max")
+
+# Структура «ёлочка» (гейты по этапам, Этап 4.40): tier1 (3 узла, открыты сразу)
+# → mastery (узел «мастерство» = выбор класса; открыт, когда ЛЮБОЙ tier1 на макс.)
+# → tier2 (2 узла; открыты, когда mastery на макс.) → tier3 (3 узла; открыты,
+# когда ЛЮБОЙ tier2 на макс.) → ultimate (открыт, когда ЛЮБОЙ tier3 на макс.).
+# В сетке меню: ряд1=tier1[0..2], ряд2=[tier2[0], mastery, tier2[1]],
+# ряд3=tier3[0..2], ряд4=ultimate (по центру).
+const TREE := {
+	"combat": {"title": "Сражение",
+		"tier1": ["weapon_basic", "combat_reinforce", "health_boost"],
+		"mastery": "combat_mastery",
+		"tier2": ["weapon_mid", "armor_improve"],
+		"tier3": ["weapon_adv", "battlefield_expert", "special_weapon"],
+		"ultimate": "airstrike"},
+	"gather": {"title": "Выживание",
+		"tier1": ["gather_basic", "speed_boost", "adventurer"],
+		"mastery": "survival_mastery",
+		"tier2": ["gather_adv", "campfire_skill"],
+		"tier3": ["hunter", "patience", "scavenger"],
+		"ultimate": "camouflage"},
+	"engineer": {"title": "Технология",
+		"tier1": ["field_repair", "engineer_basic", "project_improve"],
+		"mastery": "tech_mastery",
+		"tier2": ["engineer_mid", "electrician"],
+		"tier3": ["recycling", "engineer_expert", "skilled_builder"],
+		"ultimate": "demolition"},
+}
+const BRANCH_ORDER := ["combat", "gather", "engineer"]
+
+# Реестр узлов: id → {branch, name, icon, max, kind, desc, ready}.
+#   kind: "normal" | "mastery" (выбор класса) | "signature" (ультимейт, F).
+#   ready: реализован ли эффект (false → в UI помечается «скоро»).
 const SKILLS := {
-	"melee":    {"branch": "combat",   "name": "Сила удара", "icon": "sword"},
-	"vigor":    {"branch": "combat",   "name": "Закалка",    "icon": "heart"},
-	"gather":   {"branch": "gather",   "name": "Сбор",       "icon": "pickaxe"},
-	"capacity": {"branch": "gather",   "name": "Запас",      "icon": "backpack"},
-	"repair":   {"branch": "engineer", "name": "Ремонт",     "icon": "hammer"},
-	"turret":   {"branch": "engineer", "name": "Турели",     "icon": "turret"},
+	# --- Бой ---
+	"weapon_basic":     {"branch": "combat", "name": "Мастер оружия (нач.)", "icon": "sword", "max": 3, "kind": "normal", "ready": false, "desc": "Оружие нач. уровня; +урон; −15% цена."},
+	"weapon_mid":       {"branch": "combat", "name": "Мастер оружия (средн.)", "icon": "sword", "max": 3, "kind": "normal", "ready": false, "desc": "Винтовки/снайперки; +урон; −20% цена."},
+	"weapon_adv":       {"branch": "combat", "name": "Мастер оружия (продв.)", "icon": "sword", "max": 3, "kind": "normal", "ready": false, "desc": "Пулемёты/снаряжение; +урон; −25% цена."},
+	"combat_reinforce": {"branch": "combat", "name": "Боевое подкрепление", "icon": "c4", "max": 1, "kind": "normal", "ready": false, "desc": "Ёмкость магазина +50%."},
+	"combat_mastery":   {"branch": "combat", "name": "Боевое мастерство", "icon": "sword", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Боец». На верстаке доступно Мачете."},
+	"battlefield_expert": {"branch": "combat", "name": "Эксперт на поле боя", "icon": "sprint", "max": 2, "kind": "normal", "ready": false, "desc": "При низком HP — невидимость на время."},
+	"health_boost":     {"branch": "combat", "name": "Улучшение запаса HP", "icon": "heart", "max": 3, "kind": "normal", "ready": true, "desc": "Макс. HP: +15 / +30 / +45."},
+	"armor_improve":    {"branch": "combat", "name": "Улучшение бронежилета", "icon": "backpack", "max": 3, "kind": "normal", "ready": false, "desc": "Прочность брони +20% / +150% / +200%."},
+	"special_weapon":   {"branch": "combat", "name": "Мастер особого оружия", "icon": "c4", "max": 3, "kind": "normal", "ready": true, "desc": "Урон топора +4/ур; гранаты; −30% цена."},
+	"airstrike":        {"branch": "combat", "name": "Запрос на авиаудар", "icon": "airstrike", "max": 1, "kind": "signature", "ready": true, "desc": "Авиаудар (F): AoE 80, радиус 5, кд 25 с."},
+	# --- Выживание ---
+	"gather_basic":     {"branch": "gather", "name": "Мастерство сбора (нач.)", "icon": "pickaxe", "max": 3, "kind": "normal", "ready": true, "desc": "Сбор: ресурса за удар 2 / 3 / 4; +лимит."},
+	"gather_adv":       {"branch": "gather", "name": "Мастерство сбора (продв.)", "icon": "pickaxe", "max": 3, "kind": "normal", "ready": false, "desc": "Сбор в особых местах; +скорость/кол-во."},
+	"hunter":           {"branch": "gather", "name": "Охотник", "icon": "turret", "max": 1, "kind": "normal", "ready": false, "desc": "Скорость установки ловушек и их урон +."},
+	"speed_boost":      {"branch": "gather", "name": "Повышение скорости", "icon": "sprint", "max": 3, "kind": "normal", "ready": true, "desc": "Скорость передвижения +5% / +10% / +20%."},
+	"survival_mastery": {"branch": "gather", "name": "Мастерство выживания", "icon": "pickaxe", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Добытчик». На верстаке доступен Лом."},
+	"patience":         {"branch": "gather", "name": "Терпение", "icon": "heart", "max": 1, "kind": "normal", "ready": true, "desc": "Расход психздоровья ×0.5; при 50% HP +1%/с."},
+	"adventurer":       {"branch": "gather", "name": "Искатель приключений", "icon": "backpack", "max": 3, "kind": "normal", "ready": false, "desc": "Быстрее находить дерево/сталь; видеть врагов."},
+	"campfire_skill":   {"branch": "gather", "name": "Походный костёр", "icon": "c4", "max": 1, "kind": "normal", "ready": true, "desc": "Костёр восстанавливает HP и психздоровье."},
+	"scavenger":        {"branch": "gather", "name": "Мусорщик", "icon": "backpack", "max": 1, "kind": "normal", "ready": true, "desc": "Больше шанс ресурсов и денег с зомби."},
+	"camouflage":       {"branch": "gather", "name": "Маскировка", "icon": "sprint", "max": 1, "kind": "signature", "ready": false, "desc": "Невидимость для врагов 15 с (F)."},
+	# --- Инженер ---
+	"field_repair":     {"branch": "engineer", "name": "Ремонт на поле боя", "icon": "hammer", "max": 3, "kind": "normal", "ready": true, "desc": "Ремонт построек +5% / +10% / +15%."},
+	"engineer_mid":     {"branch": "engineer", "name": "Инженер (средн.)", "icon": "turret", "max": 3, "kind": "normal", "ready": false, "desc": "Башня связи; +скорость/прочность построек."},
+	"recycling":        {"branch": "engineer", "name": "Переработка", "icon": "hammer", "max": 1, "kind": "normal", "ready": false, "desc": "Сбор ресурсов после разрушения построек."},
+	"engineer_basic":   {"branch": "engineer", "name": "Инженер (нач.)", "icon": "hammer", "max": 3, "kind": "normal", "ready": false, "desc": "Верстак; +скорость/прочность построек."},
+	"tech_mastery":     {"branch": "engineer", "name": "Техническое мастерство", "icon": "hammer", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Инженер». На верстаке доступен Молот."},
+	"engineer_expert":  {"branch": "engineer", "name": "Инженер-эксперт", "icon": "turret", "max": 3, "kind": "normal", "ready": false, "desc": "Бетонный завод; +скорость/прочность тир3."},
+	"project_improve":  {"branch": "engineer", "name": "Улучшение проекта", "icon": "backpack", "max": 3, "kind": "normal", "ready": true, "desc": "Меньше ресурсов на постройку."},
+	"electrician":      {"branch": "engineer", "name": "Инженер-электрик", "icon": "c4", "max": 1, "kind": "normal", "ready": false, "desc": "Меньше энергии на новые постройки."},
+	"skilled_builder":  {"branch": "engineer", "name": "Умелый строитель", "icon": "hammer", "max": 1, "kind": "normal", "ready": false, "desc": "При высоком психздоровье +скорость стройки."},
+	"demolition":       {"branch": "engineer", "name": "Команда подрывников", "icon": "c4", "max": 1, "kind": "signature", "ready": true, "desc": "C4 (F): крафт на верстаке, рвёт любой объект."},
 }
-const SKILL_MAX_LEVEL := 3
 
-var skill_levels: Dictionary = {
-	"melee": 0, "vigor": 0, "gather": 0, "capacity": 0, "repair": 0, "turret": 0,
-}
+var skill_levels: Dictionary = {}     # id → уровень (инициализируется в _init_skill_levels)
 
-# Класс игрока (Этап 4.12). Один из "combat"/"gather"/"engineer"; "" — ещё не
-# выбран (класс выбирается в меню навыков N). Класс определяет ТОЛЬКО сигнатурную
-# способность (верхний узел своей ветки, клавиша F).
+# Класс игрока. Один из "combat"/"gather"/"engineer"; "" — ещё не выбран. Класс
+# выбирается на узле «мастерство» своей ветки (Этап 4.40), а не на старте.
 signal class_changed(player_class: String)
 var player_class: String = ""
 
-# Сигнатурные способности (Этап 4.12): открываются узлом своей ветки за очко
-# (нужен выбранный класс + хотя бы 1 вложенное очко в свою ветку). Эффект — в
-# player.gd (клавиша F). Здесь — только состояние.
-var has_airstrike: bool = false   # Боец — Авиаудар
-var has_sprint: bool = false      # Добытчик — Ускорение
-var has_c4: bool = false          # Инженер — право крафтить C4
-var c4_charges: int = 0           # сколько зарядов C4 в наличии (крафт в мастерской)
+# Сигнатурные способности (тир-4 ультимейты): открываются как обычный узел после
+# выбора класса ветки. Эффект — в player.gd (клавиша F).
+var has_airstrike: bool = false    # Боец — Авиаудар
+var has_camouflage: bool = false   # Добытчик — Маскировка (эффект «скоро»)
+var has_c4: bool = false           # Инженер — Команда подрывников (C4)
+var c4_charges: int = 0            # сколько зарядов C4 в наличии (крафт на верстаке)
 
 
 func _ready() -> void:
+	_init_skill_levels()
 	# EventBus загружается после InventorySystem — подписываемся отложенно,
 	# когда все автозагрузки уже готовы (Этап 4.23).
 	_connect_events.call_deferred()
+
+
+## Инициализация уровней всех узлов нулями.
+func _init_skill_levels() -> void:
+	skill_levels.clear()
+	for id in SKILLS:
+		skill_levels[id] = 0
 
 
 ## Подписка на «ночь пережита» для начисления очка навыка (Этап 4.23).
@@ -114,14 +169,14 @@ func add_resource(resource_type: String, amount: int) -> void:
 	inventory_changed.emit(inventory)
 
 
-## Лимит дерева/стали: базовый + навык «Запас» (capacity, +20 за уровень).
+## Лимит дерева/стали: базовый + «Мастерство сбора» (+20 за уровень — переносим больше).
 func get_resource_cap() -> int:
-	return RESOURCE_CAP + 20 * int(skill_levels.get("capacity", 0))
+	return RESOURCE_CAP + 20 * int(skill_levels.get("gather_basic", 0))
 
 
-## Сколько ресурса даёт один удар топором по узлу: база 1 + уровень навыка «Сбор».
+## Сколько ресурса даёт один удар топором по узлу: база 1 + уровень «Мастерства сбора».
 func gather_yield() -> int:
-	return 1 + int(skill_levels.get("gather", 0))
+	return 1 + int(skill_levels.get("gather_basic", 0))
 
 
 ## Использовать ресурсы для крафта (возвращает true если достаточно).
@@ -179,20 +234,87 @@ func get_branch_level(branch: String) -> int:
 	return total
 
 
-## Поднять узел-навык на 1 уровень за 1 очко. Возвращает true при успехе.
+## Группа узла: {branch, group} (tier1/mastery/tier2/tier3/ultimate) или {}.
+func _group(skill_id: String) -> Dictionary:
+	for b in TREE:
+		var t: Dictionary = TREE[b]
+		if skill_id in t.tier1: return {"branch": b, "group": "tier1"}
+		if skill_id == t.mastery: return {"branch": b, "group": "mastery"}
+		if skill_id in t.tier2: return {"branch": b, "group": "tier2"}
+		if skill_id in t.tier3: return {"branch": b, "group": "tier3"}
+		if skill_id == t.ultimate: return {"branch": b, "group": "ultimate"}
+	return {}
+
+
+## Есть ли среди узлов хотя бы один, прокачанный до своего максимума.
+func _any_maxed(ids: Array) -> bool:
+	for id in ids:
+		if int(skill_levels.get(id, 0)) >= get_skill_max(id):
+			return true
+	return false
+
+
+## Потолок конкретного узла (у каждого свой "max").
+func get_skill_max(skill_id: String) -> int:
+	return int(SKILLS[skill_id].get("max", SKILL_MAX_LEVEL)) if SKILLS.has(skill_id) else SKILL_MAX_LEVEL
+
+
+## Совместимость: общий вызов get_skill_cap(id).
+func get_skill_cap(skill_id: String = "") -> int:
+	return get_skill_max(skill_id) if skill_id != "" else SKILL_MAX_LEVEL
+
+
+## Открыт ли узел для вложения (гейты «ёлочки»):
+## tier1 — всегда; mastery — когда ЛЮБОЙ tier1 на макс. (и класс свободен/свой);
+## tier2 — когда mastery на макс.; tier3 — когда ЛЮБОЙ tier2 на макс.;
+## ultimate — когда ЛЮБОЙ tier3 на макс.
+func is_skill_unlocked(skill_id: String) -> bool:
+	if not SKILLS.has(skill_id):
+		return false
+	var g := _group(skill_id)
+	if g.is_empty():
+		return false
+	var t: Dictionary = TREE[g.branch]
+	match g.group:
+		"tier1":
+			return true
+		"mastery":
+			return _any_maxed(t.tier1) and (player_class == "" or player_class == g.branch)
+		"tier2":
+			return int(skill_levels.get(t.mastery, 0)) >= get_skill_max(t.mastery)
+		"tier3":
+			return _any_maxed(t.tier2)
+		"ultimate":
+			return _any_maxed(t.tier3)
+	return false
+
+
+## Поднять узел на 1 уровень за очко (с проверкой предусловия). true при успехе.
 func upgrade_skill(skill_id: String) -> bool:
 	if not SKILLS.has(skill_id):
 		return false
 	if skill_points <= 0:
 		print("Навыки: нет свободных очков")
 		return false
-	if int(skill_levels.get(skill_id, 0)) >= SKILL_MAX_LEVEL:
-		print("Навыки: «", skill_id, "» на потолке (", SKILL_MAX_LEVEL, ")")
+	if int(skill_levels.get(skill_id, 0)) >= get_skill_max(skill_id):
+		print("Навыки: «", skill_id, "» на потолке")
+		return false
+	if not is_skill_unlocked(skill_id):
+		print("Навыки: «", skill_id, "» закрыт — сначала прокачайте предыдущий узел")
 		return false
 	skill_points -= 1
 	skill_levels[skill_id] = int(skill_levels.get(skill_id, 0)) + 1
-	print("Навыки: «", skill_id, "» → ур.", skill_levels[skill_id],
-			" (осталось очков: ", skill_points, ")")
+	var meta: Dictionary = SKILLS[skill_id]
+	if meta.kind == "mastery" and player_class == "":
+		player_class = meta.branch
+		print("Класс выбран: ", player_class)
+		class_changed.emit(player_class)
+	elif meta.kind == "signature":
+		match skill_id:
+			"airstrike": has_airstrike = true
+			"camouflage": has_camouflage = true
+			"demolition": has_c4 = true
+	print("Навыки: «", skill_id, "» → ур.", skill_levels[skill_id], " (очков: ", skill_points, ")")
 	skills_changed.emit()
 	return true
 
@@ -204,15 +326,9 @@ func add_skill_point(amount: int = 1) -> void:
 	skills_changed.emit()
 
 
-## Потолок любого узла-навыка — SKILL_MAX_LEVEL (3).
-func get_skill_cap(_skill_id: String = "") -> int:
-	return SKILL_MAX_LEVEL
-
-
-## Выбрать класс игрока (Этап 4.12). Вызывается экраном выбора класса один раз
-## за забег. Меняет идентичность: своя ветка/способность/стат-бонусы.
+## Совместимость с тестами: прямой выбор класса (как взятие узла мастерства).
 func set_class(c: String) -> void:
-	if c not in ["combat", "gather", "engineer"]:
+	if c not in BRANCH_ORDER or player_class != "":
 		return
 	player_class = c
 	print("Класс выбран: ", c)
@@ -220,46 +336,36 @@ func set_class(c: String) -> void:
 	skills_changed.emit()
 
 
-## Открыта ли сигнатурная способность СВОЕГО класса.
+## Открыта ли сигнатурная способность своего класса.
 func ability_unlocked() -> bool:
 	match player_class:
 		"combat": return has_airstrike
-		"gather": return has_sprint
+		"gather": return has_camouflage
 		"engineer": return has_c4
 	return false
 
 
-## Открыть сигнатурную способность своего класса за 1 очко (Этап 4.12).
-## Требует выбранного класса и уровня своей ветки ≥ 1. Возвращает true при успехе.
+## Совместимость с тестами: открыть сигнатуру своего класса (как взятие ультимейта).
 func unlock_ability() -> bool:
-	if player_class == "" or ability_unlocked():
-		return false
-	if get_branch_level(player_class) < 1:
-		print("Навыки: сначала вложите очко в свою ветку")
-		return false
-	if skill_points <= 0:
-		print("Навыки: нет свободных очков")
+	if player_class == "" or ability_unlocked() or skill_points <= 0:
 		return false
 	skill_points -= 1
+	skill_levels[TREE[player_class].ultimate] = 1
 	match player_class:
 		"combat": has_airstrike = true
-		"gather": has_sprint = true
+		"gather": has_camouflage = true
 		"engineer": has_c4 = true
-	print("Навыки: открыта сигнатурная способность класса «", player_class, "»")
 	skills_changed.emit()
 	return true
 
 
-## Сбросить прогрессию класса/навыков для нового забега (Этап 4.12). Экран
-## выбора класса вызывает это при старте сцены, чтобы класс выбирался заново
-## (InventorySystem — автозагрузка и переживает reload_current_scene).
+## Сбросить прогрессию класса/навыков для нового забега.
 func reset_run_progression() -> void:
 	player_class = ""
 	skill_points = 3
-	for id in skill_levels:
-		skill_levels[id] = 0          # на старте ничего не вкачано
+	_init_skill_levels()              # все узлы на 0 — ничего не вкачано
 	has_airstrike = false
-	has_sprint = false
+	has_camouflage = false
 	has_c4 = false
 	c4_charges = 0
 	skills_changed.emit()

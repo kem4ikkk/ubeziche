@@ -143,8 +143,8 @@ func _craft_tool(tool: String) -> bool:
 	if InventorySystem.get(spec.flag):
 		print("Мастерская: «", spec.title, "» уже скрафчен")
 		return false
-	if InventorySystem.get_branch_level(spec.branch) < spec.req_level:
-		print("Мастерская: «", spec.title, "» требует ветку «", spec.branch, "» уровня ", spec.req_level)
+	if InventorySystem.player_class != spec.branch:
+		print("Мастерская: «", spec.title, "» требует мастерство ветки «", spec.branch, "»")
 		return false
 	var cost: Dictionary = spec.cost
 	if InventorySystem.get_resource("wood") < cost.wood \
@@ -164,10 +164,10 @@ func _tool_spec(tool: String) -> Dictionary:
 	match tool:
 		"knife":
 			return {"flag": "has_knife", "branch": "combat", "req_level": 1,
-					"cost": KNIFE_COST, "title": "Нож"}
+					"cost": KNIFE_COST, "title": "Мачете"}
 		"improved_axe":
-			return {"flag": "has_improved_axe", "branch": "gather", "req_level": 2,
-					"cost": IMPROVED_AXE_COST, "title": "Улучшенный топор"}
+			return {"flag": "has_improved_axe", "branch": "gather", "req_level": 1,
+					"cost": IMPROVED_AXE_COST, "title": "Лом"}
 		_:
 			return {"flag": "has_hammer", "branch": "engineer", "req_level": 1,
 					"cost": HAMMER_COST, "title": "Молот"}

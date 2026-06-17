@@ -58,11 +58,10 @@ func _physics_process(delta: float) -> void:
 
 ## Стреляем по цели (Этап 4.25: без боезапаса, только при наличии питания —
 ## проверка _has_power уже сделана в _physics_process).
-## Урон множится навыком «Турели» (Инженер): +5% за уровень. Аналог Turret
-## Component из оригинала.
+## Урон турели. Бонус к урону турелей даёт «Молот» (Техническое мастерство) —
+## будет подключён отдельной стадией; пока базовый урон.
 func _try_fire(target: Node3D) -> void:
 	var dmg := turret_damage
-	dmg *= 1.0 + 0.05 * InventorySystem.get_skill_level("turret")
 	if target.has_method("take_damage"):
 		target.take_damage(dmg)
 	print("Турель стреляет (-", dmg, " HP)")

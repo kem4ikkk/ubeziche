@@ -256,8 +256,10 @@ func _physics_process(delta: float) -> void:
 	# Переводим направление в мировые координаты (с учётом поворота тела).
 	var direction := (transform.basis * input_dir).normalized()
 
-	# Эффективная скорость с учётом ускорения Добытчика (Этап 4.12c).
-	var cur_speed := speed * (sprint_multiplier if _sprint_timer > 0.0 else 1.0)
+	# Эффективная скорость: пассивный навык «Повышение скорости» (+5/+10/+20%, Этап
+	# 4.40) × временное ускорение (если активно).
+	var sb_mult: float = [1.0, 1.05, 1.10, 1.20][clampi(InventorySystem.get_skill_level("speed_boost"), 0, 3)]
+	var cur_speed := speed * sb_mult * (sprint_multiplier if _sprint_timer > 0.0 else 1.0)
 	if direction != Vector3.ZERO:
 		velocity.x = direction.x * cur_speed
 		velocity.z = direction.z * cur_speed
@@ -437,7 +439,7 @@ func swing_axe() -> void:
 			# Урон = база + ветка «Бой» + Нож. Бонус «Боя» снижен с ×10 до ×4
 			# (правка 2026-06-16): на ×10 ближний бой стал слишком сильным —
 			# на бое 3 топор сносил обычного зомби с одного удара, танка за два.
-			var dmg := axe_damage + InventorySystem.get_skill_level("melee") * 4.0
+			var dmg := axe_damage + InventorySystem.get_skill_level("special_weapon") * 4.0
 			if InventorySystem.has_knife:
 				dmg += 10.0
 			target.take_damage(dmg)
@@ -500,7 +502,7 @@ func _repair_building(node: Node) -> void:
 		print("CLAUDE: постройка уже на максимум HP")
 		return
 	# Навык «Ремонт» (Инженер) добавляет +5% HP за уровень, молот удваивает итог.
-	var amount := repair_amount * (1.0 + 0.05 * InventorySystem.get_skill_level("repair"))
+	var amount := repair_amount * (1.0 + 0.05 * InventorySystem.get_skill_level("field_repair"))
 	if InventorySystem.has_hammer:
 		amount *= 2.0
 	node.repair(amount)
@@ -535,11 +537,17 @@ func use_class_ability() -> void:
 			if InventorySystem.has_airstrike:
 				_call_airstrike()
 		"gather":
-			if InventorySystem.has_sprint:
-				_sprint()
+			if InventorySystem.has_camouflage:
+				_camouflage()
 		"engineer":
 			if InventorySystem.has_c4:
 				_place_c4()
+
+
+## Маскировка (Добытчик, ультимейт ветки «Выживание») — эффект будет добавлен
+## позже (Этап 4.40+); пока заглушка.
+func _camouflage() -> void:
+	print("Маскировка: эффект скоро (невидимость для врагов 15 с)")
 
 
 ## Авиаудар (Боец): по точке прицела, с задержкой — AoE урон по зомби, кулдаун.
@@ -612,7 +620,7 @@ func _aim_ground_point(max_dist: float) -> Vector3:
 func _apply_combat_hp() -> void:
 	if not is_instance_valid(health):
 		return
-	var bonus: float = 15.0 * InventorySystem.get_skill_level("vigor")
+	var bonus: float = 15.0 * InventorySystem.get_skill_level("health_boost")
 	var new_max: float = _base_max_health + bonus
 	var delta: float = new_max - health.max_health
 	health.max_health = new_max
