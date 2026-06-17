@@ -187,12 +187,15 @@ func _make_node(parent: Control, cx: int, cy: float, d: int) -> Dictionary:
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(badge)
 	var badge_l := Label.new()
-	badge_l.size = Vector2(bw, 20)
 	badge_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	badge_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	badge_l.add_theme_font_size_override("font_size", 12)
 	badge_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	badge.add_child(badge_l)
+	# Ярлык ВСЕГДА растянут на весь pill (anchors) → текст центрируется при любой
+	# ширине бейджа (раньше при динамической ширине ярлык не совпадал с pill и
+	# текст уходил влево).
+	badge_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Кнопка-клик (поверх, прозрачная).
 	var btn := Button.new()
@@ -256,11 +259,10 @@ func _style_node(node: Dictionary, color: Color, frac: float, ring_color: Color,
 	# Ширина pill-бейджа под текст (чтобы слова «выбрать»/«✓ выбран» влезали).
 	var f: Font = ThemeDB.fallback_font
 	var tw: float = f.get_string_size(badge_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x if f != null else 40.0
-	var bw: float = clampf(tw + 22.0, 44.0, 132.0)
+	var bw: float = clampf(tw + 24.0, 44.0, 132.0)
 	var d: float = node.d
 	node.badge.size.x = bw
-	node.badge.position.x = (d - bw) / 2.0
-	node.badge_l.size.x = bw
+	node.badge.position.x = (d - bw) / 2.0   # ярлык растянут anchors-ом — следует за pill
 
 
 func _refresh() -> void:
