@@ -57,8 +57,7 @@ func _rebuild() -> void:
 	var ws := _resolve_workshop()
 	if ws == null:
 		return
-	# Стена за ресурсы.
-	_add_button("Стена (2 дерева)", false, func() -> void: ws.craft_wall(); _rebuild())
+	# Стена строится в МЕНЮ ПОСТРОЕК (B), а не здесь (правка автора).
 	# Апгрейд тира за ресурсы.
 	var tier: int = InventorySystem.shelter_tier
 	if tier >= InventorySystem.MAX_TIER:

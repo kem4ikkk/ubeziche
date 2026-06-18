@@ -323,8 +323,12 @@ func _on_game_over(victory: bool) -> void:
 
 
 func _on_inventory_changed(inventory: Dictionary) -> void:
+	# Показываем только собираемые ресурсы (дерево/сталь). «Стена» — это постройка
+	# (ставится в B-меню), а не ресурс инвентаря, и в HUD не выводится.
 	var text = ""
 	for resource_type in inventory:
+		if resource_type == "wall":
+			continue
 		var label_name: String = RESOURCE_NAMES.get(resource_type, resource_type.capitalize())
 		text += "%s: %d\n" % [label_name, inventory[resource_type]]
 	inventory_label.text = text.strip_edges()

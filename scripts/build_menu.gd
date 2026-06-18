@@ -10,6 +10,13 @@ extends CanvasLayer
 var _capture_mode := false
 var _build_system: Node
 
+## Иконка-«фотка» для каждой постройки (файлы в assets/icons, рисует gen_skill_icons.py).
+const ICON := {
+	"Стена": "bricks", "Мастерская": "toolcross", "Генератор": "generator",
+	"Турель": "turret", "Лазарет": "medkit", "Костёр": "campfire",
+	"Мортира": "mortar", "Гатлинг": "mg",
+}
+
 
 func _ready() -> void:
 	add_to_group("build_menu")
@@ -21,7 +28,13 @@ func _ready() -> void:
 
 ## Единый стиль (Этап UI-1): тёмная панель + кнопки в стиле меню навыков.
 func _apply_style() -> void:
-	($Panel as Panel).theme = UiStyle.theme()
+	var panel := $Panel as Panel
+	panel.theme = UiStyle.theme()
+	# Шире/выше — под сетку карточек (Этап UI-2).
+	panel.offset_left = -300.0
+	panel.offset_right = 300.0
+	panel.offset_top = -235.0
+	panel.offset_bottom = 235.0
 	var title := $Panel/VBox/TitleLabel as Label
 	title.add_theme_font_size_override("font_size", 22)
 	title.add_theme_color_override("font_color", UiStyle.ACCENT)
@@ -59,28 +72,79 @@ func _rebuild() -> void:
 	var bs := _resolve_build_system()
 	if bs == null:
 		return
+	# Сетка карточек-построек (Этап UI-2): иконка + название + стоимость + доступность.
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	_list.add_child(grid)
 	for b in bs.get_buildables():
-		var b_name: String = b.name
-		var min_tier: int = int(b.get("min_tier", 1))
-		var locked: bool = InventorySystem.shelter_tier < min_tier
-		# Нехватка ресурсов гасит кнопку прямо в меню (Этап 4.31), а не при попытке
-		# поставить. Тир-гейт показываем в приоритете (его не обойти ресурсами).
-		var poor: bool = not locked and not _can_afford(b.cost)
-		var suffix := ""
-		if locked:
-			suffix = "  (нужен Тир %d)" % min_tier
-		elif poor:
-			suffix = "  (не хватает ресурсов)"
-		var btn := Button.new()
-		btn.text = "%s — %s%s" % [b_name, _cost_text(b.cost), suffix]
-		btn.disabled = locked or poor
-		btn.pressed.connect(_on_pick.bind(b_name))
-		_list.add_child(btn)
-	# Кнопка выхода из режима постройки.
+		grid.add_child(_make_card(b))
+	# Кнопка выхода из режима постройки (во всю ширину).
 	var exit_btn := Button.new()
 	exit_btn.text = "Выйти из режима постройки"
 	exit_btn.pressed.connect(_on_exit_build)
 	_list.add_child(exit_btn)
+
+
+## Карточка постройки: фон-кнопка + название (верх) + иконка (центр) + стоимость/
+## доступность (низ). Заблокированные (тир/ресурсы) — затемнены и некликабельны.
+func _make_card(b: Dictionary) -> Control:
+	var min_tier: int = int(b.get("min_tier", 1))
+	var locked: bool = InventorySystem.shelter_tier < min_tier
+	var poor: bool = not locked and not _can_afford(b.cost)
+
+	var card := Button.new()
+	card.custom_minimum_size = Vector2(130, 118)
+	card.disabled = locked or poor
+	card.pressed.connect(_on_pick.bind(b.name))
+
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 4)
+	card.add_child(v)
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	v.offset_left = 6; v.offset_right = -6; v.offset_top = 6; v.offset_bottom = -6
+
+	var nm := Label.new()
+	nm.text = b.name
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.add_theme_font_size_override("font_size", 14)
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(nm)
+
+	var ic := TextureRect.new()
+	ic.texture = _icon_for(b.name)
+	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ic.custom_minimum_size = Vector2(46, 46)
+	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(ic)
+
+	var info := Label.new()
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.add_theme_font_size_override("font_size", 12)
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if locked:
+		info.text = "нужен Тир %d" % min_tier
+		info.add_theme_color_override("font_color", UiStyle.BAD)
+	else:
+		info.text = _cost_text(b.cost)
+		info.add_theme_color_override("font_color", UiStyle.WARN if poor else UiStyle.MUTED)
+	v.add_child(info)
+
+	if card.disabled:
+		card.modulate = Color(1, 1, 1, 0.5)
+	return card
+
+
+## Текстура-иконка постройки (или null, если не задана/не найдена).
+func _icon_for(building_name: String) -> Texture2D:
+	var key: String = ICON.get(building_name, "")
+	var path := "res://assets/icons/%s.png" % key
+	return load(path) if key != "" and ResourceLoader.exists(path) else null
 
 
 ## Выбрать постройку: входим в режим постройки и закрываем меню (ЛКМ ставит).

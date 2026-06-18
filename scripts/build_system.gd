@@ -31,7 +31,7 @@ var _current: int = 0
 
 func _ready() -> void:
 	_buildables = [
-		{"name": "Стена", "scene": wall_scene, "cost": {"wall": 1}, "min_tier": 1},
+		{"name": "Стена", "scene": wall_scene, "cost": {"wood": 2}, "min_tier": 1},
 		{"name": "Мастерская", "scene": workshop_scene, "cost": {"wood": 10, "steel": 5}, "min_tier": 1},
 		{"name": "Генератор", "scene": generator_scene, "cost": {"steel": 10, "wood": 5}, "min_tier": 1},
 		{"name": "Турель", "scene": turret_scene, "cost": {"steel": 3, "wood": 2}, "min_tier": 1},

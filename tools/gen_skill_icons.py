@@ -369,6 +369,55 @@ def i_dynamite(im, d, dk):
     disc(d, 372, 176, 18)                                 # искра
 
 
+# --- Иконки построек (меню B) ---
+def i_turret(im, d, dk):
+    rrect(d, [150, 360, 362, 420], 12)                    # станина
+    disc(d, 240, 350, 58)                                 # башня
+    rrect(d, [250, 322, 440, 378], 10)                    # ствол
+    dk.ellipse([218, 328, 262, 372], fill=K)              # ось башни
+
+
+def i_mortar(im, d, dk):
+    rrect(d, [128, 392, 300, 432], 8)                     # опорная плита
+    stroke(d, [(186, 406), (356, 176)], 48)               # ствол под углом
+    dk.line([(214, 366), (330, 250)], fill=K, width=12)   # шов ствола
+    disc(d, 362, 168, 20)                                 # дульный срез
+
+
+def i_medkit(im, d, dk):
+    rrect(d, [126, 174, 386, 406], 18)                    # коробка аптечки
+    rrect(d, [126, 174, 386, 226], 18)                    # крышка
+    dk.rectangle([236, 250, 276, 372], fill=K)            # крест (вертикаль)
+    dk.rectangle([196, 290, 316, 332], fill=K)            # крест (горизонт)
+
+
+def i_generator(im, d, dk):
+    rrect(d, [138, 196, 374, 404], 16)                    # корпус генератора
+    poly(dk, [(284, 226), (198, 322), (252, 322), (224, 396),
+              (332, 286), (270, 286)], K)                 # молния (чёрная)
+
+
+# --- Иконки ресурсов (HUD) ---
+def i_wood(im, d, dk):
+    rrect(d, [148, 206, 388, 330], 30)                    # бревно
+    ring(dk, 200, 268, 42, 11, K)                         # годовые кольца
+    ring(dk, 200, 268, 19, 11, K)
+
+
+def i_steel(im, d, dk):
+    poly(d, [(176, 252), (336, 252), (380, 336), (132, 336)])   # слиток-трапеция
+    poly(d, [(176, 252), (336, 252), (312, 216), (200, 216)])   # верхняя грань
+    dk.line([(176, 252), (336, 252)], fill=K, width=9)
+
+
+def i_coin(im, d, dk):
+    disc(d, 256, 256, 118)
+    ring(dk, 256, 256, 96, 9, K)                          # ободок
+    dk.line([(256, 168), (256, 344)], fill=K, width=18)   # $ — вертикаль
+    dk.arc([198, 176, 318, 262], 300, 150, fill=K, width=18)
+    dk.arc([198, 252, 318, 338], 120, 330, fill=K, width=18)
+
+
 ICONS = {
     # Сражение
     "pistol": i_pistol, "rifle": i_rifle, "mg": i_mg, "magazine": i_magazine,
@@ -382,6 +431,9 @@ ICONS = {
     "wrench": i_wrench, "gear": i_gear, "tower": i_tower, "factory": i_factory,
     "toolcross": i_toolcross, "blueprint": i_blueprint, "bolt": i_bolt,
     "recycle": i_recycle, "bricks": i_bricks, "dynamite": i_dynamite,
+    # Постройки (меню B) и ресурсы (HUD)
+    "turret": i_turret, "mortar": i_mortar, "medkit": i_medkit,
+    "generator": i_generator, "wood": i_wood, "steel": i_steel, "coin": i_coin,
 }
 
 
