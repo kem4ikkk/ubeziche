@@ -160,12 +160,12 @@ func _add_node(parent: Control, id: String, center: Vector2, d: int, color: Colo
 ## сходящиеся/ветвящиеся пути не дают острых углов («ломаности»).
 func _curve_points(a: Vector2, b: Vector2) -> PackedVector2Array:
 	var dy: float = a.y - b.y                     # a — ниже (больше y), b — выше
-	# Длинные вертикальные касательные (k=1.0) → пути выходят/входят в узлы
+	# Длинные вертикальные касательные (k=1.2) → пути выходят/входят в узлы
 	# вертикально и мягко изгибаются «ступенькой» (при k≈0.55 изгиб почти не виден).
-	var c1 := a + Vector2(0, -dy * 1.0)
-	var c2 := b + Vector2(0, dy * 1.0)
+	var c1 := a + Vector2(0, -dy * 1.2)
+	var c2 := b + Vector2(0, dy * 1.2)
 	var pts := PackedVector2Array()
-	var n := 30
+	var n := 40
 	for i in n + 1:
 		pts.append(a.bezier_interpolate(c1, c2, b, float(i) / n))
 	return pts
