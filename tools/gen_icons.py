@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Ассеты дерева навыков: СПЛОШНЫЕ белые силуэты-иконки из листа автора +
-круглые диски/кольца/замок для узлов (вид по референсу автора).
+"""Ассеты дерева навыков: выразительные белые силуэты из листа автора +
+диски/кольца/замок/мягкий glow для круглых узлов.
 
-Иконки: лист 3x3 (Downloads/Gemini_Generated_Image_...png) — чёрный контур на
-белой карточке, карточки на сером фоне. Для каждой ячейки: находим белую
-карточку по яркости и обрезаем по ней → строим СПЛОШНОЙ силуэт: утолщаем
-контур (замыкая разрывы), заливаем фон от краёв (flood fill), всё, что не фон,
-= силуэт (контур + внутренняя область) → белый силуэт на прозрачном фоне.
-Сплошная заливка читается чётче тонкого контура и совпадает со стилем
-референса (белые глифы на цветных кружках).
+Иконки: лист 3x3 (Downloads/Gemini_Generated_Image_...png), чёрный контур на
+белой карточке. Для каждой ячейки: находим карточку по яркости, обрезаем,
+строим СПЛОШНОЙ силуэт (замыкаем контур, заливаем фон от краёв), сглаживаем
+край (анти-алиас), а ВНУТРЕННИЕ линии рисунка (не граница) «выгравировываем»
+прозрачными канавками — так возвращается детализация (карман рюкзака, ствол
+турели, фитиль бомбы), и иконки выглядят выразительнее простого пятна.
 
-Круги/кольца/замок — для круглых узлов: диск (сплошной) тонируется цветом
-ветки через modulate, кольцо — обводка, замок — бейдж недоступности.
+Круги/кольца/замок/glow — для круглых узлов: диск (тонируется цветом ветки),
+кольцо (обводка), замок (бейдж недоступности), glow (мягкое радиальное
+свечение под активным узлом).
 
-Запуск (разово): python tools/gen_icons.py
-Инструмент сборки ассетов — в самой игре Python не используется.
+Запуск (разово): python tools/gen_icons.py — в самой игре Python не нужен.
 """
 import os
-from PIL import Image, ImageDraw, ImageFilter
+import math
+from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets", "icons")
@@ -33,12 +33,11 @@ ORDER = [
 
 CANVAS = 224
 MARGIN = 0.14
-BRIGHT = 200       # выше — «белая карточка»
-DARK = 120         # ниже — линия контура
+BRIGHT = 200
+DARK = 120
 
 
 def _ramp(p):
-    """Мягкий порог: превращает размытую маску в анти-алиас край (~ленту 40 ед.)."""
     lo, hi = 108, 150
     if p <= lo:
         return 0
@@ -47,42 +46,39 @@ def _ramp(p):
     return int((p - lo) / (hi - lo) * 255)
 
 
-def _solid_silhouette(tile):
-    """RGB-плитка карточки → L-маска сплошного белого силуэта с гладким краем.
-
-    Качество (борьба с «углами» от грубого ИИ-контура): работаем на ×2, контур
-    замыкаем морфологическим ЗАКРЫТИЕМ (Max→Min, без квадратного раздувания),
-    заливаем фон от краёв, затем размываем маску и прогоняем через мягкий порог
-    — край получается сглаженным, а не ступенчатым.
-    """
+def _silhouette(tile):
+    """RGB-плитка → L-альфа: сплошной силуэт со сглаженным краем и внутренними
+    канавками-деталями (гравировка)."""
     UP = 2
     L = tile.convert("L")
     w, h = L.size[0] * UP, L.size[1] * UP
     L = L.resize((w, h), Image.LANCZOS)
-    # Контур (тёмные пиксели) → морфологическое закрытие (замкнуть разрывы,
-    # не утолщая силуэт и не «обрубая» углы квадратами).
-    outline = L.point(lambda p: 255 if p < DARK else 0)
-    outline = outline.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.MinFilter(3))
+    line = L.point(lambda p: 255 if p < DARK else 0)          # тёмные линии рисунка
+    closed = line.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.MinFilter(3))
     base = Image.new("RGB", (w, h), (255, 255, 255))
-    base.paste((0, 0, 0), mask=outline)
-    seeds = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
-             (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]
-    for s in seeds:
+    base.paste((0, 0, 0), mask=closed)
+    for s in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
+              (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]:
         try:
             ImageDraw.floodfill(base, s, (255, 0, 60), thresh=40)
         except Exception:
             pass
     px = base.load()
-    sil = Image.new("L", (w, h), 0)
-    sp = sil.load()
+    solid = Image.new("L", (w, h), 0)
+    sp = solid.load()
     for y in range(h):
         for x in range(w):
             r, g, b = px[x, y]
             if not (r > 200 and g < 80 and b < 110):
                 sp[x, y] = 255
-    # Сглаживание края: размытие + мягкий порог (анти-алиас лента).
-    sil = sil.filter(ImageFilter.GaussianBlur(2.4)).point(_ramp)
-    return sil
+    # Внутренние детали: исходные линии, лежащие в глубине силуэта (не на границе).
+    eroded = solid.filter(ImageFilter.MinFilter(9))
+    inner = ImageChops.multiply(line, eroded.point(lambda p: 255 if p > 0 else 0))
+    inner = inner.filter(ImageFilter.MaxFilter(3))            # чуть толще, чтобы канавка читалась
+    # Сглаженный край силуэта минус внутренние канавки.
+    alpha = solid.filter(ImageFilter.GaussianBlur(2.2)).point(_ramp)
+    alpha = ImageChops.subtract(alpha, inner)
+    return alpha
 
 
 def extract_icons():
@@ -93,20 +89,18 @@ def extract_icons():
     for r in range(3):
         for c in range(3):
             cell = sheet.crop((c * cw, r * ch, (c + 1) * cw, (r + 1) * ch))
-            gray = cell.convert("L")
-            bright = gray.point(lambda p: 255 if p > BRIGHT else 0)
+            bright = cell.convert("L").point(lambda p: 255 if p > BRIGHT else 0)
             bbox = bright.getbbox()
             if bbox:
                 x0, y0, x1, y1 = bbox
                 ins = 6
                 cell = cell.crop((x0 + ins, y0 + ins, max(x0 + 7, x1 - ins), max(y0 + 7, y1 - ins)))
-            sil = _solid_silhouette(cell)
-            sbox = sil.point(lambda p: 255 if p > 30 else 0).getbbox()
+            alpha = _silhouette(cell)
+            sbox = alpha.point(lambda p: 255 if p > 30 else 0).getbbox()
             if sbox:
-                sil = sil.crop(sbox)
-            # Белый силуэт по маске альфы.
-            icon = Image.new("RGBA", sil.size, (255, 255, 255, 0))
-            icon.putalpha(sil)
+                alpha = alpha.crop(sbox)
+            icon = Image.new("RGBA", alpha.size, (255, 255, 255, 0))
+            icon.putalpha(alpha)
             max_dim = int(CANVAS * (1 - 2 * MARGIN))
             sw, sh = icon.size
             scale = min(max_dim / sw, max_dim / sh)
@@ -137,6 +131,20 @@ def _ring(size, thick):
     img.resize((size, size), Image.LANCZOS).save(os.path.join(OUT, "ring_%d.png" % size))
 
 
+def _glow():
+    S = 256
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    px = img.load()
+    c = S / 2.0
+    for y in range(S):
+        for x in range(S):
+            dist = math.hypot(x - c, y - c) / c
+            a = max(0.0, 1.0 - dist)
+            a = a * a * a                       # мягкий спад к краю
+            px[x, y] = (255, 255, 255, int(255 * a))
+    img.save(os.path.join(OUT, "glow.png"))
+
+
 def _lock():
     S = 4
     s = 64 * S
@@ -151,9 +159,10 @@ def _lock():
 
 def main():
     extract_icons()
-    for sz in (58, 76):
+    for sz in (52, 72):
         _disc(sz)
         _ring(sz, 4)
+    _glow()
     _lock()
     print("Готово:", OUT)
     for f in sorted(os.listdir(OUT)):

@@ -1253,17 +1253,22 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  после входа в зону: game_over=", game_state.is_game_over, ", HUD итог: '", result_text, "'")
 		_dump_state("ПОСЛЕ эвакуации")
 
-	# 6.999) Финал: показываем дерево навыков (узлы-иконки) на снимке.
+	# 6.999) Финал: показываем дерево навыков (ёлочка) на снимке — проходим полную
+	# цепочку Инженера + немного в других ветках, чтобы видеть открытые/закрытые/
+	# максимальные узлы, замки и пути.
 	if is_instance_valid(player):
 		InventorySystem.reset_run_progression()
-		InventorySystem.set_class("combat")
-		InventorySystem.skill_points = 12
-		InventorySystem.upgrade_skill("melee")     # Сила удара ур.2
-		InventorySystem.upgrade_skill("melee")
-		InventorySystem.upgrade_skill("vigor")     # Закалка ур.1
-		InventorySystem.unlock_ability()           # открыт Авиаудар (Боец)
-		InventorySystem.upgrade_skill("gather")    # узлы других веток — для наглядности
-		InventorySystem.upgrade_skill("repair")
+		InventorySystem.skill_points = 40
+		for i in 3: InventorySystem.upgrade_skill("field_repair")   # tier1 до макс
+		InventorySystem.upgrade_skill("tech_mastery")               # выбор класса Инженер
+		for i in 3: InventorySystem.upgrade_skill("engineer_mid")   # tier2 до макс
+		InventorySystem.upgrade_skill("recycling")                  # tier3 (max1)
+		InventorySystem.upgrade_skill("demolition")                 # ультимейт
+		InventorySystem.upgrade_skill("health_boost")               # tier1 другой ветки
+		InventorySystem.upgrade_skill("gather_basic")
+		print("  показ дерева: класс=", InventorySystem.player_class,
+				" tech_mastery=", InventorySystem.get_skill_level("tech_mastery"),
+				" demolition=", InventorySystem.get_skill_level("demolition"))
 		var sm_show := get_tree().get_first_node_in_group("skill_menu")
 		if is_instance_valid(sm_show) and sm_show.has_method("toggle") and not sm_show.visible:
 			sm_show.toggle()
