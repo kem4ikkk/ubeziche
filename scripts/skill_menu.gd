@@ -120,15 +120,15 @@ func _build_tree() -> void:
 		# открыт): tier1 → мастерство (3 сходятся) → tier2 (2 ветвятся) →
 		# tier3 (X в центр) → ультимейт (3 сходятся).
 		for n0 in data.tier1:
-			_paths.append({"line": _make_line(tree, pos[n0], pos[data.mastery]), "upper": data.mastery})
-		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier2[0]]), "upper": data.tier2[0]})
-		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier2[1]]), "upper": data.tier2[1]})
-		_paths.append({"line": _make_line(tree, pos[data.tier2[0]], pos[data.tier3[0]]), "upper": data.tier3[0]})
-		_paths.append({"line": _make_line(tree, pos[data.tier2[0]], pos[data.tier3[1]]), "upper": data.tier3[1]})
-		_paths.append({"line": _make_line(tree, pos[data.tier2[1]], pos[data.tier3[1]]), "upper": data.tier3[1]})
-		_paths.append({"line": _make_line(tree, pos[data.tier2[1]], pos[data.tier3[2]]), "upper": data.tier3[2]})
+			_paths.append({"line": _make_line(tree, pos[n0], pos[data.mastery]), "lower": n0, "upper": data.mastery})
+		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier2[0]]), "lower": data.mastery, "upper": data.tier2[0]})
+		_paths.append({"line": _make_line(tree, pos[data.mastery], pos[data.tier2[1]]), "lower": data.mastery, "upper": data.tier2[1]})
+		_paths.append({"line": _make_line(tree, pos[data.tier2[0]], pos[data.tier3[0]]), "lower": data.tier2[0], "upper": data.tier3[0]})
+		_paths.append({"line": _make_line(tree, pos[data.tier2[0]], pos[data.tier3[1]]), "lower": data.tier2[0], "upper": data.tier3[1]})
+		_paths.append({"line": _make_line(tree, pos[data.tier2[1]], pos[data.tier3[1]]), "lower": data.tier2[1], "upper": data.tier3[1]})
+		_paths.append({"line": _make_line(tree, pos[data.tier2[1]], pos[data.tier3[2]]), "lower": data.tier2[1], "upper": data.tier3[2]})
 		for n3 in data.tier3:
-			_paths.append({"line": _make_line(tree, pos[n3], pos[data.ultimate]), "upper": data.ultimate})
+			_paths.append({"line": _make_line(tree, pos[n3], pos[data.ultimate]), "lower": n3, "upper": data.ultimate})
 
 		# Заголовок ветки + счётчик вложенного.
 		var head := _make_label(tree, x - 110, 42, 220, 22)
@@ -160,12 +160,12 @@ func _add_node(parent: Control, id: String, center: Vector2, d: int, color: Colo
 ## сходящиеся/ветвящиеся пути не дают острых углов («ломаности»).
 func _curve_points(a: Vector2, b: Vector2) -> PackedVector2Array:
 	var dy: float = a.y - b.y                     # a — ниже (больше y), b — выше
-	# Длинные вертикальные касательные (k=0.9) → пути выходят/входят в узлы
+	# Длинные вертикальные касательные (k=1.0) → пути выходят/входят в узлы
 	# вертикально и мягко изгибаются «ступенькой» (при k≈0.55 изгиб почти не виден).
-	var c1 := a + Vector2(0, -dy * 0.9)
-	var c2 := b + Vector2(0, dy * 0.9)
+	var c1 := a + Vector2(0, -dy * 1.0)
+	var c2 := b + Vector2(0, dy * 1.0)
 	var pts := PackedVector2Array()
-	var n := 24
+	var n := 30
 	for i in n + 1:
 		pts.append(a.bezier_interpolate(c1, c2, b, float(i) / n))
 	return pts
@@ -337,9 +337,13 @@ func _refresh() -> void:
 		_style(node, float(lvl) / float(maxv), ring, glow_t, can and lvl == 0,
 				badge_text, badge_color, not unlocked)
 
+	# Путь горит цветом ветки, только когда его НИЖНИЙ (исходный) узел прокачан до
+	# макс. — т.е. подсвечивается именно тот маршрут, что игрок реально прошёл
+	# (а не все линии к узлу, открытому любым из соседей).
 	for p in _paths:
 		var br: String = InventorySystem.SKILLS[p.upper].branch
-		p.line.default_color = BRANCH_COLOR[br] if InventorySystem.is_skill_unlocked(p.upper) else PATH_GRAY
+		var done: bool = InventorySystem.get_skill_level(p.lower) >= InventorySystem.get_skill_max(p.lower)
+		p.line.default_color = BRANCH_COLOR[br] if done else PATH_GRAY
 
 
 func _class_title(branch: String) -> String:
