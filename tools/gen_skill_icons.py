@@ -397,25 +397,52 @@ def i_generator(im, d, dk):
               (332, 286), (270, 286)], K)                 # молния (чёрная)
 
 
-# --- Иконки ресурсов (HUD) ---
-def i_wood(im, d, dk):
-    rrect(d, [148, 206, 388, 330], 30)                    # бревно
-    ring(dk, 200, 268, 42, 11, K)                         # годовые кольца
-    ring(dk, 200, 268, 19, 11, K)
+# --- LINE-ART иконки ресурсов (HUD), в стиле примеров автора: тонкий БЕЛЫЙ контур
+#     без чёрной заливки/обводки (рендерятся через render_line). В HUD тонируются
+#     по цвету (деньги — зелёные и т.п.). ---
+LWID = 28                                                 # толщина контура
 
 
-def i_steel(im, d, dk):
-    poly(d, [(176, 252), (336, 252), (380, 336), (132, 336)])   # слиток-трапеция
-    poly(d, [(176, 252), (336, 252), (312, 216), (200, 216)])   # верхняя грань
-    dk.line([(176, 252), (336, 252)], fill=K, width=9)
+def _closed(d, pts, w):
+    stroke(d, list(pts) + [pts[0]], w)
 
 
-def i_coin(im, d, dk):
-    disc(d, 256, 256, 118)
-    ring(dk, 256, 256, 96, 9, K)                          # ободок
-    dk.line([(256, 168), (256, 344)], fill=K, width=18)   # $ — вертикаль
-    dk.arc([198, 176, 318, 262], 300, 150, fill=K, width=18)
-    dk.arc([198, 252, 318, 338], 120, 330, fill=K, width=18)
+def il_coin(im, d, dk):
+    ring(d, 256, 256, 158, LWID)                          # внешнее кольцо
+    ring(d, 256, 256, 112, LWID)                          # внутреннее кольцо
+    stroke(d, [(256, 150), (256, 362)], 22)               # $ — вертикаль
+    d.arc([196, 150, 316, 258], 285, 150, fill=W, width=22)   # верх «S»
+    d.arc([196, 254, 316, 362], 110, 335, fill=W, width=22)   # низ «S»
+
+
+def il_wood(im, d, dk):
+    r = 58
+    logs = [(356, 214, 150), (336, 360, 150), (176, 360, 92)]  # (торец_x, торец_y, левый_x)
+    for ex, ey, lx in logs:
+        ring(d, ex, ey, r, LWID)                          # торец бревна
+        d.arc([ex - 26, ey - 26, ex + 26, ey + 26], 30, 320, fill=W, width=16)  # спираль
+        stroke(d, [(ex, ey - r), (lx, ey - r)], LWID)     # верхняя грань тела
+        stroke(d, [(ex, ey + r), (lx, ey + r)], LWID)     # нижняя грань тела
+        stroke(d, [(lx, ey - r), (lx, ey + r)], LWID)     # плоский левый торец
+
+
+def il_steel(im, d, dk):
+    x0, x1, x2, x3 = 100, 166, 238, 304
+    y0, y1, y2, y3 = 270, 318, 392, 440
+    prof = [(x0, y0), (x3, y0), (x3, y1), (x2, y1), (x2, y2), (x3, y2), (x3, y3),
+            (x0, y3), (x0, y2), (x1, y2), (x1, y1), (x0, y1)]
+    _closed(d, prof, LWID)                                # передняя «I»-грань
+    ex, ey = 150, 102                                     # глубина (вправо-вверх)
+    stroke(d, [(x0, y0), (x0 + ex, y0 - ey)], LWID)       # рёбра верхней полки в глубину
+    stroke(d, [(x3, y0), (x3 + ex, y0 - ey)], LWID)
+    stroke(d, [(x0 + ex, y0 - ey), (x3 + ex, y0 - ey)], LWID)
+    stroke(d, [(x3 + ex, y0 - ey), (x3 + ex, y1 - ey)], LWID)
+    stroke(d, [(x3, y1), (x3 + ex, y1 - ey)], LWID)
+
+
+def il_energy(im, d, dk):
+    # Контурная молния (энергия/питание) — в HUD тонируется оранжевым.
+    _closed(d, [(286, 104), (176, 300), (252, 300), (214, 420), (360, 232), (276, 232)], LWID)
 
 
 ICONS = {
@@ -431,9 +458,13 @@ ICONS = {
     "wrench": i_wrench, "gear": i_gear, "tower": i_tower, "factory": i_factory,
     "toolcross": i_toolcross, "blueprint": i_blueprint, "bolt": i_bolt,
     "recycle": i_recycle, "bricks": i_bricks, "dynamite": i_dynamite,
-    # Постройки (меню B) и ресурсы (HUD)
-    "turret": i_turret, "mortar": i_mortar, "medkit": i_medkit,
-    "generator": i_generator, "wood": i_wood, "steel": i_steel, "coin": i_coin,
+    # Постройки (меню B)
+    "turret": i_turret, "mortar": i_mortar, "medkit": i_medkit, "generator": i_generator,
+}
+
+# Контурные (line-art) иконки ресурсов — рендерятся без чёрной обводки.
+LINE_ICONS = {
+    "wood": il_wood, "steel": il_steel, "coin": il_coin, "energy": il_energy,
 }
 
 
@@ -447,6 +478,14 @@ def render(fn):
     res = Image.alpha_composite(ol, wimg)
     res = Image.alpha_composite(res, kimg)                # чёрные детали поверх
     return res
+
+
+## Рендер БЕЗ чёрной обводки — для контурных (line-art) иконок: только белый слой.
+def render_line(fn):
+    wimg = Image.new("RGBA", (S, S), (0, 0, 0, 0)); dw = ImageDraw.Draw(wimg)
+    kimg = Image.new("RGBA", (S, S), (0, 0, 0, 0)); dk = ImageDraw.Draw(kimg)
+    fn(wimg, dw, dk)
+    return Image.alpha_composite(wimg, kimg)
 
 
 def finish(res, name):
@@ -465,6 +504,9 @@ def main():
     for name, fn in ICONS.items():
         finish(render(fn), name)
         print("ok", name)
+    for name, fn in LINE_ICONS.items():
+        finish(render_line(fn), name)
+        print("ok (line)", name)
     # Контактный лист для визуальной проверки (на тёмных кругах, как в игре).
     cols = 6
     rows = (len(ICONS) + cols - 1) // cols

@@ -100,19 +100,24 @@ func _build_hud_panels() -> void:
 	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	move_child(_vignette, 0)
 
-	# ↖ Ресурсы (строки с иконками).
+	# ↖ Ресурсы (строки с иконками, единый размер шрифта/иконок).
 	var rv := _panel_vbox(_make_panel(th, 0, 0, Vector2(12, 12)))
+	rv.add_theme_constant_override("separation", 8)
 	inventory_label.visible = false                    # старый мультилейбл не нужен
-	var wr := _icon_row(rv, "wood"); _wood_val = Label.new(); _tune_label(_wood_val, 19, UiStyle.TEXT); wr.add_child(_wood_val)
-	var sr := _icon_row(rv, "steel"); _steel_val = Label.new(); _tune_label(_steel_val, 19, UiStyle.TEXT); sr.add_child(_steel_val)
-	var mr := _icon_row(rv, "coin"); _reparent(money_label, mr); _tune_label(money_label, 19, UiStyle.ACCENT)
-	var pr := _icon_row(rv, "bolt"); _reparent(power_label, pr); _tune_label(power_label, 15, UiStyle.MUTED)
+	_wood_val = _row_label(_icon_row(rv, "wood"), 18, UiStyle.TEXT)
+	_steel_val = _row_label(_icon_row(rv, "steel"), 18, UiStyle.TEXT)
+	var mr := _icon_row(rv, "coin", UiStyle.GOOD)      # деньги — зелёные
+	_reparent(money_label, mr); _tune_label(money_label, 18, UiStyle.GOOD)
+	money_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var pr := _icon_row(rv, "energy", UiStyle.WARN)    # энергия — оранжевая
+	_reparent(power_label, pr); _tune_label(power_label, 18, UiStyle.WARN)
+	power_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	# ↗ Статус (день/ночь, тир).
 	var sv := _panel_vbox(_make_panel(th, 1, 0, Vector2(-12, 12)))
-	_reparent(phase_label, sv); _tune_label(phase_label, 19, UiStyle.TEXT)
+	_reparent(phase_label, sv); _tune_label(phase_label, 18, UiStyle.TEXT)
 	phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_reparent(tier_label, sv); _tune_label(tier_label, 15, UiStyle.MUTED)
+	_reparent(tier_label, sv); _tune_label(tier_label, 16, UiStyle.MUTED)
 	tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 	# ↙ Витальное: HP-полоса, рассудок-полоса, способность, патроны.
@@ -215,14 +220,27 @@ func _icon_rect(icon_name: String, sz: int) -> TextureRect:
 	return t
 
 
-## Строка «иконка + (значение)» для панели ресурсов; значение-лейбл добавляет вызвавший.
-func _icon_row(parent: Control, icon_name: String) -> HBoxContainer:
+## Строка «иконка + (значение)» для панели ресурсов. tint — цвет иконки (деньги
+## зелёные, энергия оранжевые); значение-лейбл добавляет вызвавший через _row_label.
+func _icon_row(parent: Control, icon_name: String, tint: Color = Color(1, 1, 1), sz: int = 28) -> HBoxContainer:
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 8)
+	h.add_theme_constant_override("separation", 9)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(h)
-	h.add_child(_icon_rect(icon_name, 24))
+	var ic := _icon_rect(icon_name, sz)
+	ic.modulate = tint
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(ic)
 	return h
+
+
+## Значение-лейбл в строке ресурса (выровнен по центру по вертикали с иконкой).
+func _row_label(row: HBoxContainer, size: int, col: Color) -> Label:
+	var l := Label.new()
+	_tune_label(l, size, col)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+	return l
 
 
 ## Прицел-крест с зазором по центру (вместо точки), Этап UI-3.
