@@ -154,12 +154,27 @@ func _add_node(parent: Control, id: String, center: Vector2, d: int, color: Colo
 	_nodes[id] = node
 
 
+## Плавная кривая между узлами вместо прямого отрезка: кубическая Безье,
+## выходящая ВЕРТИКАЛЬНО из нижнего узла и входящая ВЕРТИКАЛЬНО в верхний — так
+## сходящиеся/ветвящиеся пути не дают острых углов («ломаности»).
+func _curve_points(a: Vector2, b: Vector2) -> PackedVector2Array:
+	var dy: float = a.y - b.y                     # a — ниже (больше y), b — выше
+	var c1 := a + Vector2(0, -dy * 0.45)
+	var c2 := b + Vector2(0, dy * 0.45)
+	var pts := PackedVector2Array()
+	var n := 20
+	for i in n + 1:
+		pts.append(a.bezier_interpolate(c1, c2, b, float(i) / n))
+	return pts
+
+
 func _make_line(parent: Control, a: Vector2, b: Vector2) -> Line2D:
 	var ln := Line2D.new()
-	ln.points = PackedVector2Array([a, b])
+	ln.points = _curve_points(a, b)
 	ln.width = 5.0
 	ln.default_color = PATH_GRAY
 	ln.antialiased = true
+	ln.joint_mode = Line2D.LINE_JOINT_ROUND
 	ln.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	ln.end_cap_mode = Line2D.LINE_CAP_ROUND
 	parent.add_child(ln)
