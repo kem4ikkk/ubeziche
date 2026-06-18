@@ -28,6 +28,7 @@ const ROW_T1 := 452.0
 const BG := Color(0.055, 0.063, 0.078)
 const NODE_DARK := Color(0.16, 0.178, 0.214)
 const PATH_GRAY := Color(0.165, 0.18, 0.212)
+const LINE_OUTLINE := Color(0.02, 0.025, 0.035, 1.0)   # тёмная обводка под путями
 const RING_GRAY := Color(0.37, 0.395, 0.45)
 const TXT := Color(0.91, 0.918, 0.93)
 const TXT_MUTED := Color(0.54, 0.565, 0.61)
@@ -159,18 +160,30 @@ func _add_node(parent: Control, id: String, center: Vector2, d: int, color: Colo
 ## сходящиеся/ветвящиеся пути не дают острых углов («ломаности»).
 func _curve_points(a: Vector2, b: Vector2) -> PackedVector2Array:
 	var dy: float = a.y - b.y                     # a — ниже (больше y), b — выше
-	var c1 := a + Vector2(0, -dy * 0.45)
-	var c2 := b + Vector2(0, dy * 0.45)
+	var c1 := a + Vector2(0, -dy * 0.55)
+	var c2 := b + Vector2(0, dy * 0.55)
 	var pts := PackedVector2Array()
-	var n := 20
+	var n := 24
 	for i in n + 1:
 		pts.append(a.bezier_interpolate(c1, c2, b, float(i) / n))
 	return pts
 
 
+## Линия-путь рисуется в ДВА слоя: тёмная обводка пошире + цветная линия поверх.
+## Так пути читаются как аккуратные «кабели», а пересечения не сливаются.
 func _make_line(parent: Control, a: Vector2, b: Vector2) -> Line2D:
+	var pts := _curve_points(a, b)
+	var outline := Line2D.new()
+	outline.points = pts
+	outline.width = 10.0
+	outline.default_color = LINE_OUTLINE
+	outline.antialiased = true
+	outline.joint_mode = Line2D.LINE_JOINT_ROUND
+	outline.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	outline.end_cap_mode = Line2D.LINE_CAP_ROUND
+	parent.add_child(outline)
 	var ln := Line2D.new()
-	ln.points = _curve_points(a, b)
+	ln.points = pts
 	ln.width = 5.0
 	ln.default_color = PATH_GRAY
 	ln.antialiased = true
