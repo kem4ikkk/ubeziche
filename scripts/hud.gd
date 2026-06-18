@@ -15,11 +15,14 @@ extends CanvasLayer
 @onready var power_label: Label = $PowerLabel
 @onready var ability_label: Label = $AbilityLabel
 
-# Психздоровье (Этап 1B): строятся кодом в _ready (полоса + затемнение краёв).
+# HUD-панели (Этап UI-1) — строятся кодом в _ready (единый стиль, полосы, виньетка).
 var _sanity_label: Label
 var _sanity_fill: ColorRect
+var _hp_fill: ColorRect
 var _vignette: TextureRect
-const SANITY_BAR_W := 188.0
+var _hp_cur: float = 100.0
+var _hp_max: float = 100.0
+const BAR_W := 230.0
 
 const ALERT_DURATION := 2.5  ## сколько секунд держим тревожное сообщение (Этап 4.9)
 
@@ -72,12 +75,15 @@ func _ready() -> void:
 	InventorySystem.tier_changed.connect(_on_tier_changed)
 	tier_label.text = "Тир убежища: %d" % InventorySystem.shelter_tier
 
-	_build_sanity_ui()
+	_build_hud_panels()
 
 
-## Полоса психздоровья (слева под «Питанием») + затемнение краёв (виньетка),
-## Этап 1B. Строим кодом, чтобы не править hud.tscn.
-func _build_sanity_ui() -> void:
+## Реструктуризация HUD (Этап UI-1): единый Theme + три сгруппированные тёмные
+## панели (ресурсы ↖, статус ↗, витальное ↙ с полосами HP/рассудка) + виньетка.
+## Существующие лейблы переносим в контейнеры (ссылки @onready остаются валидны).
+func _build_hud_panels() -> void:
+	var th := UiStyle.theme()
+
 	# Виньетка — самым нижним слоем HUD (над миром, под текстом).
 	_vignette = TextureRect.new()
 	_vignette.texture = _make_vignette_tex()
@@ -89,25 +95,96 @@ func _build_sanity_ui() -> void:
 	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	move_child(_vignette, 0)
 
+	# ↖ Ресурсы.
+	var rv := _panel_vbox(_make_panel(th, 0, 0, Vector2(12, 12)))
+	_reparent(inventory_label, rv); _tune_label(inventory_label, 19, UiStyle.TEXT)
+	_reparent(money_label, rv); _tune_label(money_label, 19, UiStyle.ACCENT)
+	_reparent(power_label, rv); _tune_label(power_label, 15, UiStyle.MUTED)
+
+	# ↗ Статус (день/ночь, тир).
+	var sv := _panel_vbox(_make_panel(th, 1, 0, Vector2(-12, 12)))
+	_reparent(phase_label, sv); _tune_label(phase_label, 19, UiStyle.TEXT)
+	phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_reparent(tier_label, sv); _tune_label(tier_label, 15, UiStyle.MUTED)
+	tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	# ↙ Витальное: HP-полоса, рассудок-полоса, способность, патроны.
+	var vv := _panel_vbox(_make_panel(th, 0, 1, Vector2(12, -12)))
+	var hp := _make_bar(UiStyle.GOOD)
+	vv.add_child(hp.root)
+	_hp_fill = hp.fill
+	_reparent(health_label, hp.root)
+	health_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	health_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	health_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tune_label(health_label, 14, Color(1, 1, 1))
+	var san := _make_bar(Color(0.38, 0.78, 0.92))
+	vv.add_child(san.root)
+	_sanity_fill = san.fill
 	_sanity_label = Label.new()
-	_sanity_label.position = Vector2(12, 212)
-	_sanity_label.add_theme_font_size_override("font_size", 18)
-	_sanity_label.text = "Рассудок"
-	add_child(_sanity_label)
+	san.root.add_child(_sanity_label)
+	_sanity_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_sanity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_sanity_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tune_label(_sanity_label, 14, Color(1, 1, 1))
+	_reparent(ability_label, vv); _tune_label(ability_label, 16, UiStyle.WARN)
+	_reparent(ammo_label, vv); _tune_label(ammo_label, 16, UiStyle.TEXT)
 
+
+## Тёмная панель-контейнер, прижатая к углу (ax/ay — 0/1 левый/правый, верх/низ).
+func _make_panel(th: Theme, ax: int, ay: int, off: Vector2) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.theme = th
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.anchor_left = ax; p.anchor_right = ax
+	p.anchor_top = ay; p.anchor_bottom = ay
+	p.grow_horizontal = Control.GROW_DIRECTION_END if ax == 0 else Control.GROW_DIRECTION_BEGIN
+	p.grow_vertical = Control.GROW_DIRECTION_END if ay == 0 else Control.GROW_DIRECTION_BEGIN
+	add_child(p)
+	if ax == 0: p.offset_left = off.x
+	else: p.offset_right = off.x
+	if ay == 0: p.offset_top = off.y
+	else: p.offset_bottom = off.y
+	return p
+
+
+func _panel_vbox(p: PanelContainer) -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(v)
+	return v
+
+
+## Полоса (фон + заливка) фикс. ширины; ширину заливки задаёт код по доле.
+func _make_bar(fill_color: Color) -> Dictionary:
+	var root := Control.new()
+	root.custom_minimum_size = Vector2(BAR_W, 22)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg := ColorRect.new()
-	bg.position = Vector2(12, 240)
-	bg.size = Vector2(SANITY_BAR_W + 4.0, 16)
-	bg.color = Color(0.09, 0.10, 0.12, 0.85)
+	bg.color = UiStyle.BAR_BG
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
+	root.add_child(bg)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var fill := ColorRect.new()
+	fill.color = fill_color
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill.position = Vector2(2, 2)
+	fill.size = Vector2(BAR_W - 4, 18)
+	root.add_child(fill)
+	return {"root": root, "fill": fill}
 
-	_sanity_fill = ColorRect.new()
-	_sanity_fill.position = Vector2(14, 242)
-	_sanity_fill.size = Vector2(SANITY_BAR_W, 12)
-	_sanity_fill.color = Color(0.4, 0.8, 0.9)
-	_sanity_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_sanity_fill)
+
+func _reparent(n: Node, p: Node) -> void:
+	if n.get_parent() != null:
+		n.get_parent().remove_child(n)
+	p.add_child(n)
+
+
+func _tune_label(l: Label, size: int, col: Color) -> void:
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 ## Радиальная виньетка (прозрачный центр → чёрные края) через GradientTexture2D.
@@ -165,18 +242,30 @@ func _process(delta: float) -> void:
 
 	_update_power()
 	_update_ability()
-	_update_sanity_ui()
+	_update_vitals()
 
 
-## Полоса психздоровья + виньетка (Этап 1B): читаем рассудок игрока каждый кадр.
-func _update_sanity_ui() -> void:
+## Полосы HP и рассудка + виньетка (Этап UI-1/1B). Ширину заливки берём от
+## фактической ширины полосы (контейнер раскладывается уже после _ready).
+func _update_vitals() -> void:
+	# HP-полоса (красный → зелёный по доле).
+	if _hp_fill != null and _hp_fill.get_parent() != null:
+		var w: float = _hp_fill.get_parent().size.x - 4.0
+		var hr: float = (_hp_cur / _hp_max) if _hp_max > 0.0 else 0.0
+		_hp_fill.size.x = maxf(0.0, w * hr)
+		_hp_fill.size.y = _hp_fill.get_parent().size.y - 4.0
+		_hp_fill.color = Color(0.93, 0.30, 0.30) if hr < 0.3 else (Color(0.95, 0.72, 0.20) if hr < 0.6 else UiStyle.GOOD)
+
+	# Полоса рассудка + виньетка.
 	if _sanity_fill == null:
 		return
 	var p := get_tree().get_first_node_in_group("player")
 	if not is_instance_valid(p) or not p.has_method("get_sanity_ratio"):
 		return
 	var r: float = p.get_sanity_ratio()
-	_sanity_fill.size.x = SANITY_BAR_W * r
+	var sw: float = _sanity_fill.get_parent().size.x - 4.0
+	_sanity_fill.size.x = maxf(0.0, sw * r)
+	_sanity_fill.size.y = _sanity_fill.get_parent().size.y - 4.0
 	if r > 0.4:
 		_sanity_fill.color = Color(0.38, 0.78, 0.92)
 	elif r > 0.15:
@@ -246,6 +335,8 @@ func _on_money_changed(amount: int) -> void:
 
 
 func _on_health_changed(current: float, maximum: float) -> void:
+	_hp_cur = current
+	_hp_max = maximum
 	health_label.text = "HP: %d / %d" % [current, maximum]
 
 

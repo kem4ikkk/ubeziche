@@ -18,6 +18,15 @@ func _ready() -> void:
 	_capture_mode = OS.get_cmdline_user_args().has("--capture")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
+	_apply_style()
+
+
+## Единый стиль (Этап UI-1): тёмная панель + кнопки в стиле меню навыков.
+func _apply_style() -> void:
+	($Panel as Panel).theme = UiStyle.theme()
+	var title := $Panel/VBox/TitleLabel as Label
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", UiStyle.ACCENT)
 
 
 func _resolve_workshop() -> Node:
