@@ -81,6 +81,23 @@ var _sprint_cd: float = 0.0
 @export var c4_scene: PackedScene
 @export var c4_place_range: float = 8.0   # на какую дальность по прицелу кладём C4
 
+# Психическое здоровье (Этап 1B) — «шкала холода» как в оригинале «Убежище».
+# Падает вне тепла (быстрее ночью), растёт у костра или в «очаге» базы (центр
+# карты). При нуле: −HP по тику + сужение обзора (туннельное зрение). Навык
+# «Терпение» вдвое снижает расход и подлечивает при низком HP; костёр греет.
+const SANITY_MAX := 100.0
+const SANITY_RECOVER := 16.0          # /с, в тепле
+const SANITY_DRAIN_DAY := 1.6         # /с, вне тепла днём
+const SANITY_DRAIN_NIGHT := 3.6       # /с, вне тепла ночью
+const HEARTH_RADIUS := 6.5            # радиус «очага» базы вокруг центра карты
+const SANITY_EMPTY_TICK := 4.0        # период урона при нуле, с
+const SANITY_EMPTY_DAMAGE := 5.0      # HP за тик при нуле
+const SANITY_FOV_DROP := 20.0         # сужение FOV при нуле (туннельное зрение)
+var sanity: float = SANITY_MAX
+var _sanity_tick: float = 0.0
+var _base_fov: float = 75.0
+var _day_night: Node = null
+
 # Ссылка на камеру от первого лица. @onready = «возьми этот узел, когда сцена готова».
 @onready var camera: Camera3D = $Camera3D
 @onready var health: HealthComponent = $HealthComponent
@@ -102,6 +119,7 @@ func _ready() -> void:
 	# Записываемся в группу "player" — так враги нас находят.
 	add_to_group("player")
 	health.died.connect(_on_died)
+	_base_fov = camera.fov                    # запомним обзор для эффекта психздоровья
 
 	# Класс Боец (Этап 4.12): +макс HP за уровень ветки «Бой». Базовый максимум
 	# берём из сцены один раз, бонус пересчитываем при смене навыков/класса.
@@ -221,6 +239,9 @@ func _physics_process(delta: float) -> void:
 		_sprint_timer -= delta
 	if _sprint_cd > 0.0:
 		_sprint_cd -= delta
+
+	# Психическое здоровье (Этап 1B).
+	_update_sanity(delta)
 
 	# Зажатая ЛКМ с топором — НЕПРЕРЫВНАЯ добыча/ремонт/бой (правка 2026-06-16):
 	# можно зажать кнопку и рубить, темп задаёт кулдаун в swing_axe(). Для стволов
@@ -526,6 +547,73 @@ func take_damage(amount: float) -> void:
 ## Лечение игрока (Этап 4.7.3: покупка лечения в мастерской за деньги).
 func heal(amount: float) -> void:
 	health.heal(amount)
+
+
+## Психическое здоровье (Этап 1B): расход/восстановление, урон при нуле, обзор.
+func _update_sanity(delta: float) -> void:
+	var warm := _is_in_hearth() or _near_campfire()
+	if warm:
+		sanity = minf(sanity + SANITY_RECOVER * delta, SANITY_MAX)
+	else:
+		var drain: float = SANITY_DRAIN_NIGHT if _is_night() else SANITY_DRAIN_DAY
+		if InventorySystem.get_skill_level("patience") > 0:
+			drain *= 0.5                          # «Терпение» — вдвое медленнее
+		sanity = maxf(sanity - drain * delta, 0.0)
+
+	# При полном опустошении — периодический урон HP (как «замерзание»).
+	if sanity <= 0.0:
+		_sanity_tick += delta
+		if _sanity_tick >= SANITY_EMPTY_TICK:
+			_sanity_tick = 0.0
+			health.take_damage(SANITY_EMPTY_DAMAGE)
+	else:
+		_sanity_tick = 0.0
+
+	# «Терпение»: медленно лечит, пока HP не выше половины.
+	if InventorySystem.get_skill_level("patience") > 0 \
+			and health.current_health > 0.0 \
+			and health.current_health <= health.max_health * 0.5:
+		health.heal(health.max_health * 0.01 * delta)   # +1%/с
+
+	# Туннельное зрение: ниже 30 рассудка обзор плавно сужается.
+	var t := clampf(sanity / 30.0, 0.0, 1.0)
+	camera.fov = lerpf(_base_fov - SANITY_FOV_DROP, _base_fov, t)
+
+
+## В радиусе «очага» базы (вокруг центра карты, по горизонтали)?
+func _is_in_hearth() -> bool:
+	var p := global_position
+	return Vector2(p.x, p.z).length() <= HEARTH_RADIUS
+
+
+## Рядом ли горящий костёр (постройка), греющий игрока?
+func _near_campfire() -> bool:
+	for c in get_tree().get_nodes_in_group("campfire"):
+		if c is Node3D:
+			var rad: float = c.radius if "radius" in c else 4.0
+			if global_position.distance_to((c as Node3D).global_position) <= rad:
+				return true
+	return false
+
+
+## Сейчас ночь? (лениво ищем DayNightCycle.)
+func _is_night() -> bool:
+	if not is_instance_valid(_day_night):
+		_day_night = get_tree().get_first_node_in_group("day_night_cycle")
+	return is_instance_valid(_day_night) and _day_night.is_night
+
+
+## Добавить/снять психздоровье (костёр греет; вызывается из campfire.gd).
+func add_sanity(amount: float) -> void:
+	sanity = clampf(sanity + amount, 0.0, SANITY_MAX)
+
+
+func get_sanity() -> float:
+	return sanity
+
+
+func get_sanity_ratio() -> float:
+	return sanity / SANITY_MAX
 
 
 ## Сигнатурная способность класса (Этап 4.12b), клавиша F. Ветвится по классу и

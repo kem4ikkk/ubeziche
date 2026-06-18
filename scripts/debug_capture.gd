@@ -1253,6 +1253,34 @@ func _run_capture(args: PackedStringArray) -> void:
 		print("  после входа в зону: game_over=", game_state.is_game_over, ", HUD итог: '", result_text, "'")
 		_dump_state("ПОСЛЕ эвакуации")
 
+	# 6.9995) Психическое здоровье (Этап 1B): «шкала холода». В тепле (очаг/костёр)
+	# растёт, вне тепла падает; при нуле бьёт по HP и сужает обзор.
+	if is_instance_valid(player):
+		print("CLAUDE: проверяю психздоровье (1B)")
+		player.heal(1000.0)
+		get_tree().paused = false
+		# У очага базы (центр) рассудок восстанавливается.
+		(player as Node3D).global_position = Vector3(0, 1, 0)
+		player.sanity = 50.0
+		for i in 3: player._update_sanity(1.0)
+		print("  у очага рассудок растёт: 50 → ", snappedf(player.get_sanity(), 0.1), " (ожид. >50)")
+		# Вне тепла — падает (днём медленнее, ночью быстрее).
+		(player as Node3D).global_position = Vector3(20, 1, 20)
+		player.sanity = 30.0
+		for i in 3: player._update_sanity(1.0)
+		print("  вне тепла рассудок падает: 30 → ", snappedf(player.get_sanity(), 0.1), " (ожид. <30)")
+		# При нуле — урон HP по тику.
+		player.sanity = 0.0
+		var hp_before: float = player.get_health()
+		player._update_sanity(player.SANITY_EMPTY_TICK + 0.1)   # дотянем до тика
+		print("  при нуле HP падает: ", snappedf(hp_before, 0.1), " → ", snappedf(player.get_health(), 0.1))
+		# Возвращаем норму, чтобы не мешать показу дерева (и вернуть обзор).
+		(player as Node3D).global_position = Vector3(0, 1, 0)
+		player.sanity = player.SANITY_MAX
+		player.heal(1000.0)
+		player._update_sanity(0.1)   # вернуть FOV к норме
+		_dump_state("ПОСЛЕ психздоровья (1B)")
+
 	# 6.999) Финал: показываем дерево навыков (ёлочка) на снимке — проходим полную
 	# цепочку Инженера + немного в других ветках, чтобы видеть открытые/закрытые/
 	# максимальные узлы, замки и пути.

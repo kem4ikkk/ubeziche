@@ -15,6 +15,12 @@ extends CanvasLayer
 @onready var power_label: Label = $PowerLabel
 @onready var ability_label: Label = $AbilityLabel
 
+# Психздоровье (Этап 1B): строятся кодом в _ready (полоса + затемнение краёв).
+var _sanity_label: Label
+var _sanity_fill: ColorRect
+var _vignette: TextureRect
+const SANITY_BAR_W := 188.0
+
 const ALERT_DURATION := 2.5  ## сколько секунд держим тревожное сообщение (Этап 4.9)
 
 var _day_night_cycle: Node
@@ -66,6 +72,58 @@ func _ready() -> void:
 	InventorySystem.tier_changed.connect(_on_tier_changed)
 	tier_label.text = "Тир убежища: %d" % InventorySystem.shelter_tier
 
+	_build_sanity_ui()
+
+
+## Полоса психздоровья (слева под «Питанием») + затемнение краёв (виньетка),
+## Этап 1B. Строим кодом, чтобы не править hud.tscn.
+func _build_sanity_ui() -> void:
+	# Виньетка — самым нижним слоем HUD (над миром, под текстом).
+	_vignette = TextureRect.new()
+	_vignette.texture = _make_vignette_tex()
+	_vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vignette.modulate = Color(1, 1, 1, 0.0)
+	add_child(_vignette)
+	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	move_child(_vignette, 0)
+
+	_sanity_label = Label.new()
+	_sanity_label.position = Vector2(12, 212)
+	_sanity_label.add_theme_font_size_override("font_size", 18)
+	_sanity_label.text = "Рассудок"
+	add_child(_sanity_label)
+
+	var bg := ColorRect.new()
+	bg.position = Vector2(12, 240)
+	bg.size = Vector2(SANITY_BAR_W + 4.0, 16)
+	bg.color = Color(0.09, 0.10, 0.12, 0.85)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+
+	_sanity_fill = ColorRect.new()
+	_sanity_fill.position = Vector2(14, 242)
+	_sanity_fill.size = Vector2(SANITY_BAR_W, 12)
+	_sanity_fill.color = Color(0.4, 0.8, 0.9)
+	_sanity_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_sanity_fill)
+
+
+## Радиальная виньетка (прозрачный центр → чёрные края) через GradientTexture2D.
+func _make_vignette_tex() -> Texture2D:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	g.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 1)])
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(1.0, 0.5)
+	t.width = 320
+	t.height = 320
+	return t
+
 
 func _process(delta: float) -> void:
 	# DayNightCycle может ещё не быть готов в момент _ready() HUD-а — ищем лениво.
@@ -107,6 +165,27 @@ func _process(delta: float) -> void:
 
 	_update_power()
 	_update_ability()
+	_update_sanity_ui()
+
+
+## Полоса психздоровья + виньетка (Этап 1B): читаем рассудок игрока каждый кадр.
+func _update_sanity_ui() -> void:
+	if _sanity_fill == null:
+		return
+	var p := get_tree().get_first_node_in_group("player")
+	if not is_instance_valid(p) or not p.has_method("get_sanity_ratio"):
+		return
+	var r: float = p.get_sanity_ratio()
+	_sanity_fill.size.x = SANITY_BAR_W * r
+	if r > 0.4:
+		_sanity_fill.color = Color(0.38, 0.78, 0.92)
+	elif r > 0.15:
+		_sanity_fill.color = Color(0.95, 0.62, 0.22)
+	else:
+		_sanity_fill.color = Color(0.95, 0.28, 0.28)
+	_sanity_label.text = "Рассудок: %d%%" % roundi(r * 100.0)
+	# Затемнение краёв нарастает, когда рассудок ниже 40%.
+	_vignette.modulate.a = clampf((0.4 - r) / 0.4, 0.0, 1.0) * 0.72
 
 
 ## Строка питания (Этап 4.25): бюджет мощности генераторов vs потребление
