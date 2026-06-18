@@ -15,11 +15,16 @@ extends CanvasLayer
 @onready var power_label: Label = $PowerLabel
 @onready var ability_label: Label = $AbilityLabel
 
-# HUD-панели (Этап UI-1) — строятся кодом в _ready (единый стиль, полосы, виньетка).
+# HUD-панели (Этап UI-1/UI-3) — строятся кодом в _ready (единый стиль, полосы,
+# иконки ресурсов, прицел, баннеры тревог, экран итога, виньетка).
 var _sanity_label: Label
 var _sanity_fill: ColorRect
 var _hp_fill: ColorRect
 var _vignette: TextureRect
+var _wood_val: Label
+var _steel_val: Label
+var _alert_panel: PanelContainer
+var _evac_panel: PanelContainer
 var _hp_cur: float = 100.0
 var _hp_max: float = 100.0
 const BAR_W := 230.0
@@ -95,11 +100,13 @@ func _build_hud_panels() -> void:
 	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	move_child(_vignette, 0)
 
-	# ↖ Ресурсы.
+	# ↖ Ресурсы (строки с иконками).
 	var rv := _panel_vbox(_make_panel(th, 0, 0, Vector2(12, 12)))
-	_reparent(inventory_label, rv); _tune_label(inventory_label, 19, UiStyle.TEXT)
-	_reparent(money_label, rv); _tune_label(money_label, 19, UiStyle.ACCENT)
-	_reparent(power_label, rv); _tune_label(power_label, 15, UiStyle.MUTED)
+	inventory_label.visible = false                    # старый мультилейбл не нужен
+	var wr := _icon_row(rv, "wood"); _wood_val = Label.new(); _tune_label(_wood_val, 19, UiStyle.TEXT); wr.add_child(_wood_val)
+	var sr := _icon_row(rv, "steel"); _steel_val = Label.new(); _tune_label(_steel_val, 19, UiStyle.TEXT); sr.add_child(_steel_val)
+	var mr := _icon_row(rv, "coin"); _reparent(money_label, mr); _tune_label(money_label, 19, UiStyle.ACCENT)
+	var pr := _icon_row(rv, "bolt"); _reparent(power_label, pr); _tune_label(power_label, 15, UiStyle.MUTED)
 
 	# ↗ Статус (день/ночь, тир).
 	var sv := _panel_vbox(_make_panel(th, 1, 0, Vector2(-12, 12)))
@@ -129,6 +136,15 @@ func _build_hud_panels() -> void:
 	_tune_label(_sanity_label, 14, Color(1, 1, 1))
 	_reparent(ability_label, vv); _tune_label(ability_label, 16, UiStyle.WARN)
 	_reparent(ammo_label, vv); _tune_label(ammo_label, 16, UiStyle.TEXT)
+
+	_build_crosshair()
+	_alert_panel = _wrap_banner(alert_label, 12.0, 28)     # тревоги волн/босса
+	_evac_panel = _wrap_banner(evac_label, 64.0, 24)       # отсчёт эвакуации
+	_wrap_result(th)                                       # экран победы/поражения
+
+	# Начальное заполнение значений (контейнеры уже созданы).
+	_on_inventory_changed(InventorySystem.inventory)
+	_on_money_changed(InventorySystem.money)
 
 
 ## Тёмная панель-контейнер, прижатая к углу (ax/ay — 0/1 левый/правый, верх/низ).
@@ -187,6 +203,88 @@ func _tune_label(l: Label, size: int, col: Color) -> void:
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+func _icon_rect(icon_name: String, sz: int) -> TextureRect:
+	var t := TextureRect.new()
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.custom_minimum_size = Vector2(sz, sz)
+	var path := "res://assets/icons/%s.png" % icon_name
+	if ResourceLoader.exists(path):
+		t.texture = load(path)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return t
+
+
+## Строка «иконка + (значение)» для панели ресурсов; значение-лейбл добавляет вызвавший.
+func _icon_row(parent: Control, icon_name: String) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(h)
+	h.add_child(_icon_rect(icon_name, 24))
+	return h
+
+
+## Прицел-крест с зазором по центру (вместо точки), Этап UI-3.
+func _build_crosshair() -> void:
+	var ch := get_node_or_null("Crosshair")
+	if ch is CanvasItem:
+		(ch as CanvasItem).visible = false
+	var col := Color(1, 1, 1, 0.85)
+	var segs := [Rect2(-12, -1.5, 8, 3), Rect2(4, -1.5, 8, 3),
+			Rect2(-1.5, -12, 3, 8), Rect2(-1.5, 4, 3, 8), Rect2(-1.5, -1.5, 3, 3)]
+	for r in segs:
+		var c := ColorRect.new()
+		c.color = col
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.anchor_left = 0.5; c.anchor_top = 0.5; c.anchor_right = 0.5; c.anchor_bottom = 0.5
+		c.offset_left = r.position.x; c.offset_top = r.position.y
+		c.offset_right = r.position.x + r.size.x; c.offset_bottom = r.position.y + r.size.y
+		add_child(c)
+
+
+## Обёртка-баннер вокруг тревожного/эвакуационного лейбла (хаггит текст, тёмный фон).
+func _wrap_banner(label: Label, top_off: float, fsize: int) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UiStyle.panel_box(Color(0.07, 0.08, 0.10, 0.92), 8, 1))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.anchor_left = 0.5; p.anchor_right = 0.5; p.anchor_top = 0.0; p.anchor_bottom = 0.0
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.grow_vertical = Control.GROW_DIRECTION_END
+	add_child(p)
+	p.offset_top = top_off
+	_reparent(label, p)
+	label.visible = true
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.add_theme_font_size_override("font_size", fsize)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.visible = false
+	return p
+
+
+## Экран победы/поражения: затемнение (есть) + центральная панель с крупным текстом.
+func _wrap_result(th: Theme) -> void:
+	var wrap := PanelContainer.new()
+	wrap.theme = th
+	wrap.add_theme_stylebox_override("panel", UiStyle.panel_box(Color(0.06, 0.07, 0.09, 0.97), 18, 2))
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.anchor_left = 0.5; wrap.anchor_right = 0.5; wrap.anchor_top = 0.5; wrap.anchor_bottom = 0.5
+	wrap.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	wrap.grow_vertical = Control.GROW_DIRECTION_BOTH
+	result_screen.add_child(wrap)
+	var m := MarginContainer.new()
+	for side in ["margin_left", "margin_right"]:
+		m.add_theme_constant_override(side, 48)
+	for side in ["margin_top", "margin_bottom"]:
+		m.add_theme_constant_override(side, 32)
+	wrap.add_child(m)
+	_reparent(result_label, m)
+	result_label.add_theme_font_size_override("font_size", 44)
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
 ## Радиальная виньетка (прозрачный центр → чёрные края) через GradientTexture2D.
 func _make_vignette_tex() -> Texture2D:
 	var g := Gradient.new()
@@ -228,17 +326,17 @@ func _process(delta: float) -> void:
 	# Тревожное сообщение гаснет само через ALERT_DURATION секунд (Этап 4.9).
 	if _alert_timer > 0.0:
 		_alert_timer -= delta
-		if _alert_timer <= 0.0:
-			alert_label.visible = false
+		if _alert_timer <= 0.0 and _alert_panel != null:
+			_alert_panel.visible = false
 
 	# Финальная фаза эвакуации (Этап 4.11): обратный отсчёт до зоны.
 	if is_instance_valid(_game_state_manager) and _game_state_manager.evac_active:
 		var t := int(ceil(_game_state_manager.get_evac_time_left()))
 		evac_label.text = "🚁 Эвакуация: %d с — к зелёному лучу!" % t
 		evac_label.modulate = Color(0.3, 1.0, 0.7) if t > 10 else Color(1.0, 0.5, 0.2)
-		evac_label.visible = true
-	else:
-		evac_label.visible = false
+		if _evac_panel != null: _evac_panel.visible = true
+	elif _evac_panel != null:
+		_evac_panel.visible = false
 
 	_update_power()
 	_update_ability()
@@ -319,19 +417,17 @@ func _update_ability() -> void:
 
 func _on_game_over(victory: bool) -> void:
 	result_label.text = "ПОБЕДА!\nНажмите R для рестарта" if victory else "ПОРАЖЕНИЕ\nНажмите R для рестарта"
+	result_label.modulate = Color(0.4, 1.0, 0.5) if victory else Color(1.0, 0.42, 0.42)
 	result_screen.visible = true
 
 
 func _on_inventory_changed(inventory: Dictionary) -> void:
-	# Показываем только собираемые ресурсы (дерево/сталь). «Стена» — это постройка
-	# (ставится в B-меню), а не ресурс инвентаря, и в HUD не выводится.
-	var text = ""
-	for resource_type in inventory:
-		if resource_type == "wall":
-			continue
-		var label_name: String = RESOURCE_NAMES.get(resource_type, resource_type.capitalize())
-		text += "%s: %d\n" % [label_name, inventory[resource_type]]
-	inventory_label.text = text.strip_edges()
+	# Показываем только собираемые ресурсы (дерево/сталь) — строками с иконками.
+	# «Стена» — это постройка (ставится в B-меню), в HUD не выводится.
+	if _wood_val == null:
+		return
+	_wood_val.text = "Дерево: %d" % int(inventory.get("wood", 0))
+	_steel_val.text = "Сталь: %d" % int(inventory.get("steel", 0))
 
 
 func _on_money_changed(amount: int) -> void:
@@ -427,5 +523,6 @@ func _on_tier_changed(new_tier: int) -> void:
 func _show_alert(text: String, color: Color) -> void:
 	alert_label.text = text
 	alert_label.modulate = color
-	alert_label.visible = true
+	if _alert_panel != null:
+		_alert_panel.visible = true
 	_alert_timer = ALERT_DURATION
