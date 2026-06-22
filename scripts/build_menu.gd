@@ -130,9 +130,12 @@ func _make_card(b: Dictionary) -> Control:
 	if locked:
 		info.text = "нужен Тир %d" % min_tier
 		info.add_theme_color_override("font_color", UiStyle.BAD)
+	elif poor:
+		info.text = _deficit_text(b.cost)
+		info.add_theme_color_override("font_color", UiStyle.BAD)
 	else:
 		info.text = _cost_text(b.cost)
-		info.add_theme_color_override("font_color", UiStyle.WARN if poor else UiStyle.MUTED)
+		info.add_theme_color_override("font_color", UiStyle.MUTED)
 	v.add_child(info)
 
 	if card.disabled:
@@ -178,6 +181,16 @@ func _cost_text(cost: Dictionary) -> String:
 	for r in cost:
 		parts.append("%s %d" % [_res_name(r), int(cost[r])])
 	return ", ".join(parts)
+
+
+## Чего и сколько не хватает на постройку (красным в карточке, Этап UI-5).
+func _deficit_text(cost: Dictionary) -> String:
+	var parts: Array[String] = []
+	for r in cost:
+		var miss: int = int(cost[r]) - InventorySystem.get_resource(r)
+		if miss > 0:
+			parts.append("%d %s" % [miss, _res_name(r)])
+	return "не хватает: " + ", ".join(parts)
 
 
 func _res_name(r: String) -> String:

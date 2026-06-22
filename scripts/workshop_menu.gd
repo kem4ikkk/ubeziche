@@ -64,13 +64,19 @@ func _rebuild() -> void:
 		_add_button("Убежище: Тир %d (максимум)" % tier, true, Callable())
 	else:
 		var tc: Dictionary = ws.TIER_UPGRADE_COST[tier + 1]
+		var tcost := {"wood": int(tc.wood), "steel": int(tc.steel)}
+		var poor: bool = not _can_afford(tcost)
 		_add_button("Тир %d → %d (%d дерева, %d стали)" % [tier, tier + 1, tc.wood, tc.steel],
-				false, func() -> void: ws.upgrade_shelter_tier(); _rebuild())
+				poor, func() -> void: ws.upgrade_shelter_tier(); _rebuild())
+		if poor:
+			_add_deficit(tcost)
 	# Классовые инструменты (гейт по ветке навыка).
 	for key in ws.TOOL_KEYS:
 		var spec: Dictionary = ws.get_tool_spec(key)
 		var owned: bool = InventorySystem.get(spec.flag)
 		var locked: bool = InventorySystem.player_class != spec.branch
+		var tcost := {"wood": int(spec.cost.wood), "steel": int(spec.cost.steel)}
+		var poor: bool = not owned and not locked and not _can_afford(tcost)
 		var label: String
 		if owned:
 			label = "%s — скрафчен ✓" % spec.title
@@ -79,12 +85,48 @@ func _rebuild() -> void:
 					spec.title, spec.cost.wood, spec.cost.steel,
 					BRANCH_NAME.get(spec.branch, spec.branch),
 					"  🔒" if locked else ""]
-		_add_button(label, owned or locked, func() -> void: ws.craft_tool(key); _rebuild())
+		_add_button(label, owned or locked or poor, func() -> void: ws.craft_tool(key); _rebuild())
+		if poor:
+			_add_deficit(tcost)
 	# C4 (Этап 4.12b) — только Инженеру с открытой способностью C4.
 	if InventorySystem.has_c4:
+		var c4cost := {"wood": int(ws.C4_COST.wood), "steel": int(ws.C4_COST.steel)}
+		var poor: bool = not _can_afford(c4cost)
 		_add_button("C4 (%d дерева, %d стали) — заряд (есть: %d)" % [
 				ws.C4_COST.wood, ws.C4_COST.steel, InventorySystem.c4_charges],
-				false, func() -> void: ws.craft_c4(); _rebuild())
+				poor, func() -> void: ws.craft_c4(); _rebuild())
+		if poor:
+			_add_deficit(c4cost)
+
+
+func _can_afford(cost: Dictionary) -> bool:
+	for r in cost:
+		if InventorySystem.get_resource(r) < int(cost[r]):
+			return false
+	return true
+
+
+## Красная строка-подсказка под кнопкой: чего и сколько не хватает (Этап UI-5).
+func _add_deficit(cost: Dictionary) -> void:
+	var parts: Array[String] = []
+	for r in cost:
+		var miss: int = int(cost[r]) - InventorySystem.get_resource(r)
+		if miss > 0:
+			parts.append("%d %s" % [miss, _res_name(r)])
+	if parts.is_empty():
+		return
+	var l := Label.new()
+	l.text = "    ↳ не хватает: " + ", ".join(parts)
+	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_color_override("font_color", UiStyle.BAD)
+	_list.add_child(l)
+
+
+func _res_name(r: String) -> String:
+	match r:
+		"wood": return "дерева"
+		"steel": return "стали"
+	return r
 
 
 func _add_button(text: String, disabled: bool, cb: Callable) -> void:
