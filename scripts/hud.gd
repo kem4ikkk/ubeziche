@@ -30,6 +30,8 @@ var _shelter_label: Label
 var _shelter_panel: PanelContainer
 var _respawn_panel: PanelContainer
 var _respawn_label: Label
+var _dead_banner: PanelContainer
+var _dead_count: Label
 var _aim_hp_label: Label
 var _hp_cur: float = 100.0
 var _hp_max: float = 100.0
@@ -342,8 +344,34 @@ func _build_shelter_bar(th: Theme) -> void:
 	v.add_child(bar.root)
 
 
-## Оверлей режима наблюдателя: отсчёт возрождения (Этап 5.x), по центру экрана.
+## Оверлей режима наблюдателя (Этап 5.x): маленький баннер «ВЫ МЕРТВЫ» вверху висит
+## всё время смерти; большой отсчёт возрождения по центру — только первые 5 секунд.
 func _build_respawn_overlay(th: Theme) -> void:
+	_dead_banner = PanelContainer.new()
+	_dead_banner.add_theme_stylebox_override("panel", UiStyle.panel_box(Color(0.20, 0.05, 0.06, 0.95), 8, 1))
+	_dead_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dead_banner.anchor_left = 0.5; _dead_banner.anchor_right = 0.5
+	_dead_banner.anchor_top = 0.0; _dead_banner.anchor_bottom = 0.0
+	_dead_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_dead_banner.grow_vertical = Control.GROW_DIRECTION_END
+	add_child(_dead_banner)
+	_dead_banner.offset_top = 8
+	var dv := VBoxContainer.new()
+	dv.alignment = BoxContainer.ALIGNMENT_CENTER
+	dv.add_theme_constant_override("separation", 2)
+	dv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dead_banner.add_child(dv)
+	var dl := Label.new()
+	_tune_label(dl, 20, UiStyle.BAD)
+	dl.text = "ВЫ МЕРТВЫ"
+	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dv.add_child(dl)
+	_dead_count = Label.new()
+	_tune_label(_dead_count, 15, Color(0.92, 0.93, 0.95))
+	_dead_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dv.add_child(_dead_count)
+	_dead_banner.visible = false
+
 	_respawn_panel = PanelContainer.new()
 	_respawn_panel.add_theme_stylebox_override("panel", UiStyle.panel_box(Color(0.05, 0.06, 0.08, 0.94), 16, 2))
 	_respawn_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -465,13 +493,21 @@ func _update_objective() -> void:
 		else:
 			_shelter_panel.visible = false
 
-	# Оверлей возрождения.
-	if _respawn_panel != null:
+	# Режим наблюдателя: баннер «ВЫ МЕРТВЫ» висит всё время; большой отсчёт — 5 с.
+	if _respawn_panel != null and _dead_banner != null:
 		var p := get_tree().get_first_node_in_group("player")
 		var dead: bool = is_instance_valid(p) and p.has_method("is_dead") and p.is_dead()
-		_respawn_panel.visible = dead
+		_dead_banner.visible = dead
+		var show_big: bool = false
 		if dead:
-			_respawn_label.text = "Вы погибли\nВозрождение через %d с\n(режим наблюдателя — свободный полёт)" % ceili(p.get_respawn_left())
+			# Верхний баннер (висит всё время): «ВЫ МЕРТВЫ» + отсчёт под ним.
+			_dead_count.text = "Возрождение через %d с" % ceili(p.get_respawn_left())
+			# Большой оверлей по центру — только первые 5 секунд.
+			var elapsed: float = p.get_respawn_total() - p.get_respawn_left()
+			show_big = elapsed <= 5.0
+			if show_big:
+				_respawn_label.text = "Возрождение через %d с\n(режим наблюдателя — свободный полёт)" % ceili(p.get_respawn_left())
+		_respawn_panel.visible = show_big
 
 
 ## Объект под прицелом игрока (луч из камеры ~6 м). Нужен, чтобы показывать HP

@@ -204,7 +204,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 5)
 [node name="WorkshopMenu" parent="." instance=ExtResource("14_wsmenu")]
 
 [node name="BlastableSegment" parent="." instance=ExtResource("18_blastseg")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 0, 40)
 
 [node name="BossBar" parent="." instance=ExtResource("22_bossbar")]
 

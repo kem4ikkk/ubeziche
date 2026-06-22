@@ -55,20 +55,22 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
-	# ЦЕЛЬ зомби — УБЕЖИЩЕ в центре (Этап 5.x): они идут разрушать его, а не гнаться
-	# за игроком. Игрока бьют, только если он сам подошёл в упор. Если убежища нет
-	# (старые сцены) — цель игрок, как раньше.
 	if not is_instance_valid(_player) or not _player.is_inside_tree():
 		_player = get_tree().get_first_node_in_group("player") as Node3D
-	var shelter := get_tree().get_first_node_in_group("shelter") as Node3D
-	var target: Node3D = shelter if is_instance_valid(shelter) else _player
-	if not is_instance_valid(target) or not target.is_inside_tree():
-		velocity.x = 0.0
-		velocity.z = 0.0
-		move_and_slide()
-		return
 
-	# Постройка на пути (стена/баррикада/само убежище) — бьём её.
+	# ЦЕЛЬ зомби: ЖИВОЙ игрок (агрятся и гонятся за ним); если игрок мёртв/отсутствует
+	# — идут к ближайшей СТЕНЕ убежища, чтобы ломать его. По пути в обоих случаях
+	# бьют постройки/стены, которые им мешают (это и снимает HP убежища).
+	var player_alive: bool = is_instance_valid(_player) and _player.is_inside_tree() \
+			and not (_player.has_method("is_dead") and _player.is_dead())
+	var target_pos: Vector3
+	if player_alive:
+		target_pos = _player.global_position
+	else:
+		var seg := _nearest_shelter_segment()
+		target_pos = seg.global_position if is_instance_valid(seg) else global_position
+
+	# Постройка на пути (стена/баррикада/стена убежища) — приоритет: бьём её.
 	var blocker := _find_nearby_building()
 	if is_instance_valid(blocker):
 		var to_blocker := blocker.global_position - global_position
@@ -84,8 +86,8 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	# Игрок подошёл в упор — кусаем его (даже если идём к убежищу).
-	if is_instance_valid(_player) and _player.is_inside_tree():
+	# Живой игрок в упор — кусаем его.
+	if player_alive:
 		var to_player := _player.global_position - global_position
 		to_player.y = 0.0
 		if to_player.length() <= attack_range:
@@ -101,8 +103,8 @@ func _physics_process(delta: float) -> void:
 			move_and_slide()
 			return
 
-	# Идём к убежищу.
-	var to_t := target.global_position - global_position
+	# Преследование цели (игрок / стена убежища).
+	var to_t := target_pos - global_position
 	to_t.y = 0.0
 	if to_t.length() > 0.6:
 		var dir := to_t.normalized()
@@ -131,6 +133,19 @@ func _find_nearby_building() -> Node3D:
 			nearest = node
 			nearest_dist = dist
 	return nearest
+
+
+## Ближайшая стена убежища (группа "shelter_segment") — цель, когда игрок мёртв.
+func _nearest_shelter_segment() -> Node3D:
+	var best: Node3D = null
+	var best_dist := INF
+	for s in get_tree().get_nodes_in_group("shelter_segment"):
+		if s is Node3D:
+			var d: float = global_position.distance_to((s as Node3D).global_position)
+			if d < best_dist:
+				best_dist = d
+				best = s
+	return best
 
 
 ## Урон по зомби (например, от выстрела игрока) — тот же интерфейс, что у мишени.

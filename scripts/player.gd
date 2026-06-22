@@ -47,7 +47,7 @@ var current_ammo: int = magazine_size
 var _reloading: bool = false
 
 # Ремонт построек — теперь бесплатным ударом топора (Этап 4.21), без траты дерева.
-@export var repair_range: float = 4.0     # радиус ремонта ближайшей постройки, м
+@export var repair_range: float = 2.0     # радиус ремонта (чуть дальше упора, м)
 @export var repair_amount: float = 15.0   # сколько HP восстанавливает один удар
 
 # Топор (Этап 4.21): стартовый инструмент. Им добываем ресурсы (4.22), чиним
@@ -121,6 +121,7 @@ var _capture_mode: bool = false
 var _dead: bool = false
 var _deaths: int = 0
 var _respawn_timer: float = 0.0
+var _respawn_total: float = 0.0
 var _spawn_pos: Vector3
 var _orig_layer: int = 1
 var _orig_mask: int = 1
@@ -783,6 +784,7 @@ func _on_died() -> void:
 	_dead = true
 	_deaths += 1
 	_respawn_timer = clampf(19.0 + float(_deaths), 20.0, 30.0)   # 20..30 c, +1 за смерть
+	_respawn_total = _respawn_timer
 	collision_layer = 0                                          # наблюдатель: noclip
 	collision_mask = 0
 	velocity = Vector3.ZERO
@@ -834,3 +836,7 @@ func is_dead() -> bool:
 
 func get_respawn_left() -> float:
 	return _respawn_timer
+
+
+func get_respawn_total() -> float:
+	return _respawn_total
