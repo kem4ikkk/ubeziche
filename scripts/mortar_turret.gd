@@ -39,6 +39,7 @@ func take_damage(amount: float) -> void:
 func _on_health_changed(current: float, maximum: float) -> void:
 	hp_label.text = "Мортира %d / %d" % [current, maximum]
 	var ratio := current / maximum
+	hp_label.visible = ratio < 0.9   # надпись над постройкой — только при <90% HP
 	if ratio > 0.6:
 		hp_label.modulate = Color(0.4, 1.0, 0.4)
 	elif ratio > 0.3:
