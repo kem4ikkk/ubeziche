@@ -34,8 +34,9 @@ func _ready() -> void:
 	if _wave_manager.has_signal("wave_cleared"):
 		_wave_manager.wave_cleared.connect(_on_wave_cleared)
 
-	var health: HealthComponent = _player.get_node("HealthComponent")
-	health.died.connect(_on_player_died)
+	# Поражение теперь — РАЗРУШЕНИЕ УБЕЖИЩА (Этап 5.x), а не смерть игрока: смерть
+	# ведёт к возрождению (player.gd), а игру проигрываем, только если пало убежище.
+	EventBus.shelter_destroyed.connect(_on_shelter_destroyed)
 
 
 func _process(delta: float) -> void:
@@ -69,9 +70,10 @@ func _on_wave_cleared(wave_number: int) -> void:
 		_start_evacuation()
 
 
-func _on_player_died() -> void:
+func _on_shelter_destroyed() -> void:
 	if is_game_over:
 		return
+	print("УБЕЖИЩЕ РАЗРУШЕНО — поражение")
 	_finish(false)
 
 

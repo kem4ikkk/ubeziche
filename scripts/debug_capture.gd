@@ -1281,6 +1281,23 @@ func _run_capture(args: PackedStringArray) -> void:
 		player._update_sanity(0.1)   # вернуть FOV к норме
 		_dump_state("ПОСЛЕ психздоровья (1B)")
 
+	# 6.9996) Убежище как цель + возрождение (Этап 5.x): HP убежища растёт с тиром;
+	# смерть игрока ведёт в наблюдатели и возрождение (НЕ конец игры).
+	if is_instance_valid(player):
+		print("CLAUDE: проверяю убежище и возрождение (5.x)")
+		var sh5 := get_tree().get_first_node_in_group("shelter")
+		if is_instance_valid(sh5):
+			var hp_before: float = sh5.get_max_health()
+			if InventorySystem.shelter_tier < InventorySystem.MAX_TIER:
+				InventorySystem.set_tier(InventorySystem.shelter_tier + 1)
+			print("  HP убежища с тиром: ", snappedf(hp_before, 0.1), " → ", snappedf(sh5.get_max_health(), 0.1), " (ожид. больше)")
+		player.heal(1000.0)
+		player.take_damage(99999.0)
+		print("  после смерти: is_dead=", player.is_dead(), " (ожид. true)")
+		player._respawn()
+		print("  после возрождения: is_dead=", player.is_dead(), " HP=", snappedf(player.get_health(), 0.1))
+		_dump_state("ПОСЛЕ убежища/возрождения (5.x)")
+
 	# 6.999) Финал: показываем дерево навыков (ёлочка) на снимке — проходим полную
 	# цепочку Инженера + немного в других ветках, чтобы видеть открытые/закрытые/
 	# максимальные узлы, замки и пути.

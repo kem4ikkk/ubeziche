@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3]
+[gd_scene load_steps=32 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_zombie"]
@@ -20,6 +20,9 @@
 [ext_resource type="PackedScene" path="res://scenes/exploder.tscn" id="20_exploder"]
 [ext_resource type="PackedScene" path="res://scenes/boss.tscn" id="21_boss"]
 [ext_resource type="PackedScene" path="res://scenes/boss_bar.tscn" id="22_bossbar"]
+[ext_resource type="Script" path="res://scripts/shelter.gd" id="23_shelter"]
+[ext_resource type="Script" path="res://scripts/shelter_segment.gd" id="24_seg"]
+[ext_resource type="Script" path="res://scripts/health_component.gd" id="25_hc"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -75,11 +78,17 @@ surface_material_override/0 = SubResource("StandardMaterial3D_1")
 shape = SubResource("WorldBoundaryShape3D_1")
 
 [node name="ShelterPerimeter" type="Node3D" parent="."]
+script = ExtResource("23_shelter")
+
+[node name="HealthComponent" type="Node" parent="ShelterPerimeter"]
+script = ExtResource("25_hc")
+max_health = 600.0
 
 [node name="NorthLeft" type="StaticBody3D" parent="ShelterPerimeter"]
 transform = Transform3D(5, 0, 0, 0, 2, 0, 0, 0, 0.4, -5.5, 1, -8)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/NorthLeft"]
 mesh = SubResource("BoxMesh_unit")
@@ -92,6 +101,7 @@ shape = SubResource("BoxShape3D_unit")
 transform = Transform3D(5, 0, 0, 0, 2, 0, 0, 0, 0.4, 5.5, 1, -8)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/NorthRight"]
 mesh = SubResource("BoxMesh_unit")
@@ -104,6 +114,7 @@ shape = SubResource("BoxShape3D_unit")
 transform = Transform3D(7, 0, 0, 0, 2, 0, 0, 0, 0.4, -4.5, 1, 8)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/SouthLeft"]
 mesh = SubResource("BoxMesh_unit")
@@ -116,6 +127,7 @@ shape = SubResource("BoxShape3D_unit")
 transform = Transform3D(4, 0, 0, 0, 2, 0, 0, 0, 0.4, 6, 1, 8)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/SouthRight"]
 mesh = SubResource("BoxMesh_unit")
@@ -128,6 +140,7 @@ shape = SubResource("BoxShape3D_unit")
 transform = Transform3D(0.4, 0, 0, 0, 2, 0, 0, 0, 7, 8, 1, -4.5)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/EastTop"]
 mesh = SubResource("BoxMesh_unit")
@@ -140,6 +153,7 @@ shape = SubResource("BoxShape3D_unit")
 transform = Transform3D(0.4, 0, 0, 0, 2, 0, 0, 0, 4, 8, 1, 6)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/EastBottom"]
 mesh = SubResource("BoxMesh_unit")
@@ -152,6 +166,7 @@ shape = SubResource("BoxShape3D_unit")
 transform = Transform3D(0.4, 0, 0, 0, 2, 0, 0, 0, 16, -8, 1, 0)
 collision_layer = 1
 collision_mask = 1
+script = ExtResource("24_seg")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="ShelterPerimeter/West"]
 mesh = SubResource("BoxMesh_unit")
@@ -178,7 +193,7 @@ mesh = SubResource("PlaneMesh_unit")
 surface_material_override/0 = SubResource("StandardMaterial3D_opening")
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 5)
 
 [node name="HUD" parent="." instance=ExtResource("3_hud")]
 

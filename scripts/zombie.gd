@@ -55,21 +55,20 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
-	# Если игрок ещё не найден, погиб или сцена перезагружается — стоим и пробуем найти заново.
+	# ЦЕЛЬ зомби — УБЕЖИЩЕ в центре (Этап 5.x): они идут разрушать его, а не гнаться
+	# за игроком. Игрока бьют, только если он сам подошёл в упор. Если убежища нет
+	# (старые сцены) — цель игрок, как раньше.
 	if not is_instance_valid(_player) or not _player.is_inside_tree():
 		_player = get_tree().get_first_node_in_group("player") as Node3D
+	var shelter := get_tree().get_first_node_in_group("shelter") as Node3D
+	var target: Node3D = shelter if is_instance_valid(shelter) else _player
+	if not is_instance_valid(target) or not target.is_inside_tree():
 		velocity.x = 0.0
 		velocity.z = 0.0
 		move_and_slide()
 		return
 
-	# Вектор до игрока по горизонтали.
-	var to_player := _player.global_position - global_position
-	to_player.y = 0.0
-	var distance := to_player.length()
-
-	# Если рядом есть постройка (стена/баррикада) — она приоритетнее игрока:
-	# зомби физически упирается в неё на пути к игроку, поэтому бьёт по ней.
+	# Постройка на пути (стена/баррикада/само убежище) — бьём её.
 	var blocker := _find_nearby_building()
 	if is_instance_valid(blocker):
 		var to_blocker := blocker.global_position - global_position
@@ -82,26 +81,37 @@ func _physics_process(delta: float) -> void:
 		if _attack_timer <= 0.0:
 			_attack_timer = attack_cooldown
 			blocker.take_damage(building_attack_damage)
-			print("Зомби атакует постройку (-", building_attack_damage, " HP)")
 		move_and_slide()
 		return
 
-	if distance > attack_range:
-		# Преследование: идём к игроку и поворачиваемся к нему лицом.
-		var dir := to_player.normalized()
+	# Игрок подошёл в упор — кусаем его (даже если идём к убежищу).
+	if is_instance_valid(_player) and _player.is_inside_tree():
+		var to_player := _player.global_position - global_position
+		to_player.y = 0.0
+		if to_player.length() <= attack_range:
+			velocity.x = 0.0
+			velocity.z = 0.0
+			if to_player.length() > 0.01:
+				look_at(global_position + to_player.normalized(), Vector3.UP)
+			_attack_timer -= delta
+			if _attack_timer <= 0.0:
+				_attack_timer = attack_cooldown
+				if _player.has_method("take_damage"):
+					_player.take_damage(attack_damage)
+			move_and_slide()
+			return
+
+	# Идём к убежищу.
+	var to_t := target.global_position - global_position
+	to_t.y = 0.0
+	if to_t.length() > 0.6:
+		var dir := to_t.normalized()
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
 		look_at(global_position + dir, Vector3.UP)
 	else:
-		# В зоне атаки: стоим и бьём по кулдауну.
 		velocity.x = 0.0
 		velocity.z = 0.0
-		_attack_timer -= delta
-		if _attack_timer <= 0.0:
-			_attack_timer = attack_cooldown
-			if _player.has_method("take_damage"):
-				_player.take_damage(attack_damage)
-				print("Зомби атакует игрока (-", attack_damage, " HP)")
 
 	move_and_slide()
 

@@ -110,6 +110,17 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 # нажатия не влияли на автоматическую проверку и не забирали курсор.
 var _capture_mode: bool = false
 
+# Смерть/возрождение (Этап 5.x): смерть НЕ заканчивает игру — игрок переходит в
+# режим НАБЛЮДАТЕЛЯ (свободный полёт, без действий) и возрождается через таймер.
+# Время возрождения 20–30 c: базово 20, +1 c за каждую смерть (с потолком 30).
+@export var fly_speed: float = 12.0
+var _dead: bool = false
+var _deaths: int = 0
+var _respawn_timer: float = 0.0
+var _spawn_pos: Vector3
+var _orig_layer: int = 1
+var _orig_mask: int = 1
+
 
 func _ready() -> void:
 	_capture_mode = OS.get_cmdline_user_args().has("--capture")
@@ -120,6 +131,9 @@ func _ready() -> void:
 	add_to_group("player")
 	health.died.connect(_on_died)
 	_base_fov = camera.fov                    # запомним обзор для эффекта психздоровья
+	_spawn_pos = global_position              # точка возрождения (Этап 5.x)
+	_orig_layer = collision_layer
+	_orig_mask = collision_mask
 
 	# Класс Боец (Этап 4.12): +макс HP за уровень ветки «Бой». Базовый максимум
 	# берём из сцены один раз, бонус пересчитываем при смене навыков/класса.
@@ -151,6 +165,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotate_x(-event.relative.y * mouse_sensitivity)
 		# Не даём камере перевернуться (смотрим почти вертикально вверх/вниз).
 		camera.rotation.x = clamp(camera.rotation.x, deg_to_rad(-89), deg_to_rad(89))
+
+	# В режиме наблюдателя (мёртв) разрешён только обзор мышью — никаких действий/меню.
+	if _dead:
+		return
 
 	# Левая кнопка мыши. Если открыто меню (курсор свободен для кликов по кнопкам) —
 	# ЛКМ не стреляет и НЕ перехватывает курсор (клики по кнопкам ловит GUI).
@@ -226,6 +244,15 @@ func _close_all_menus() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Режим наблюдателя после смерти (Этап 5.x): свободный полёт + отсчёт возрождения.
+	if _dead:
+		_respawn_timer -= delta
+		if _respawn_timer <= 0.0:
+			_respawn()
+		else:
+			_fly(delta)
+		return
+
 	# Кулдаун удара топором (Этап 4.27).
 	if _swing_timer > 0.0:
 		_swing_timer -= delta
@@ -728,6 +755,63 @@ func get_health() -> float:
 	return health.current_health
 
 
+## Смерть игрока (Этап 5.x): НЕ конец игры. Уходим в режим наблюдателя — проходим
+## сквозь всё, прячем оружие/действия, считаем таймер возрождения. Игру проигрываем
+## только при разрушении убежища (game_state_manager).
 func _on_died() -> void:
-	print("ИГРОК ПОГИБ")
-	# Экран поражения и рестарт — обрабатывает GameStateManager (Этап 3.7).
+	if _dead:
+		return
+	_dead = true
+	_deaths += 1
+	_respawn_timer = clampf(19.0 + float(_deaths), 20.0, 30.0)   # 20..30 c, +1 за смерть
+	collision_layer = 0                                          # наблюдатель: noclip
+	collision_mask = 0
+	velocity = Vector3.ZERO
+	camera.fov = _base_fov                                       # сбросить туннельное зрение
+	EventBus.player_died.emit()
+	print("Игрок погиб — наблюдатель, возрождение через ", int(_respawn_timer), " c (смерть #", _deaths, ")")
+
+
+## Свободный полёт наблюдателя (по направлению камеры; пробел/Shift — выше/ниже).
+func _fly(delta: float) -> void:
+	var fwd := 0.0
+	var strafe := 0.0
+	var rise := 0.0
+	if not _capture_mode:
+		if Input.is_physical_key_pressed(KEY_W): fwd -= 1.0
+		if Input.is_physical_key_pressed(KEY_S): fwd += 1.0
+		if Input.is_physical_key_pressed(KEY_A): strafe -= 1.0
+		if Input.is_physical_key_pressed(KEY_D): strafe += 1.0
+		if Input.is_physical_key_pressed(KEY_SPACE): rise += 1.0
+		if Input.is_physical_key_pressed(KEY_SHIFT): rise -= 1.0
+	var basis := camera.global_transform.basis
+	var dir := (basis.z * fwd + basis.x * strafe)
+	dir.y = 0.0
+	var vel := Vector3.ZERO
+	if dir.length() > 0.01:
+		vel = dir.normalized() * fly_speed
+	vel.y = rise * fly_speed
+	velocity = vel
+	move_and_slide()
+
+
+## Возрождение у точки старта с полным HP (Этап 5.x).
+func _respawn() -> void:
+	_dead = false
+	collision_layer = _orig_layer
+	collision_mask = _orig_mask
+	global_position = _spawn_pos
+	velocity = Vector3.ZERO
+	health.current_health = health.max_health
+	health.health_changed.emit(health.current_health, health.max_health)
+	EventBus.player_respawned.emit()
+	print("Игрок возродился у базы")
+
+
+## Для HUD: в режиме наблюдателя и сколько секунд до возрождения.
+func is_dead() -> bool:
+	return _dead
+
+
+func get_respawn_left() -> float:
+	return _respawn_timer

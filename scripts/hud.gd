@@ -25,6 +25,12 @@ var _wood_val: Label
 var _steel_val: Label
 var _alert_panel: PanelContainer
 var _evac_panel: PanelContainer
+var _shelter_fill: ColorRect
+var _shelter_label: Label
+var _shelter_panel: PanelContainer
+var _respawn_panel: PanelContainer
+var _respawn_label: Label
+var _aim_hp_label: Label
 var _hp_cur: float = 100.0
 var _hp_max: float = 100.0
 const BAR_W := 230.0
@@ -120,8 +126,12 @@ func _build_hud_panels() -> void:
 	_reparent(tier_label, sv); _tune_label(tier_label, 16, UiStyle.MUTED)
 	tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-	# ↙ Витальное: HP-полоса, рассудок-полоса, способность, патроны.
+	# ↙ Витальное: строка HP объекта под прицелом (мелко), HP-полоса, рассудок, и т.д.
 	var vv := _panel_vbox(_make_panel(th, 0, 1, Vector2(12, -12)))
+	_aim_hp_label = Label.new()
+	_tune_label(_aim_hp_label, 13, UiStyle.MUTED)
+	vv.add_child(_aim_hp_label)
+	_aim_hp_label.visible = false
 	var hp := _make_bar(UiStyle.GOOD)
 	vv.add_child(hp.root)
 	_hp_fill = hp.fill
@@ -143,8 +153,10 @@ func _build_hud_panels() -> void:
 	_reparent(ammo_label, vv); _tune_label(ammo_label, 16, UiStyle.TEXT)
 
 	_build_crosshair()
-	_alert_panel = _wrap_banner(alert_label, 12.0, 28)     # тревоги волн/босса
-	_evac_panel = _wrap_banner(evac_label, 64.0, 24)       # отсчёт эвакуации
+	_build_shelter_bar(th)                                 # HP убежища (верх по центру)
+	_alert_panel = _wrap_banner(alert_label, 70.0, 26)     # тревоги волн/босса (ниже HP убежища)
+	_evac_panel = _wrap_banner(evac_label, 116.0, 24)      # отсчёт эвакуации
+	_build_respawn_overlay(th)                             # отсчёт возрождения (центр)
 	_wrap_result(th)                                       # экран победы/поражения
 
 	# Начальное заполнение значений (контейнеры уже созданы).
@@ -303,6 +315,58 @@ func _wrap_result(th: Theme) -> void:
 	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
 
+## Полоса HP убежища (главная цель) — вверху по центру (Этап 5.x).
+func _build_shelter_bar(th: Theme) -> void:
+	var p := PanelContainer.new()
+	p.theme = th
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.anchor_left = 0.5; p.anchor_right = 0.5; p.anchor_top = 0.0; p.anchor_bottom = 0.0
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.grow_vertical = Control.GROW_DIRECTION_END
+	add_child(p)
+	p.offset_top = 8
+	_shelter_panel = p
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 3)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(v)
+	_shelter_label = Label.new()
+	_tune_label(_shelter_label, 15, UiStyle.TEXT)
+	_shelter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shelter_label.text = "УБЕЖИЩЕ"
+	v.add_child(_shelter_label)
+	var bar := _make_bar(UiStyle.GOOD)
+	bar.root.custom_minimum_size = Vector2(280, 16)
+	_shelter_fill = bar.fill
+	v.add_child(bar.root)
+
+
+## Оверлей режима наблюдателя: отсчёт возрождения (Этап 5.x), по центру экрана.
+func _build_respawn_overlay(th: Theme) -> void:
+	_respawn_panel = PanelContainer.new()
+	_respawn_panel.add_theme_stylebox_override("panel", UiStyle.panel_box(Color(0.05, 0.06, 0.08, 0.94), 16, 2))
+	_respawn_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_respawn_panel.anchor_left = 0.5; _respawn_panel.anchor_right = 0.5
+	_respawn_panel.anchor_top = 0.5; _respawn_panel.anchor_bottom = 0.5
+	_respawn_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_respawn_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(_respawn_panel)
+	_respawn_panel.offset_top = -120
+	var m := MarginContainer.new()
+	for s in ["margin_left", "margin_right"]:
+		m.add_theme_constant_override(s, 36)
+	for s in ["margin_top", "margin_bottom"]:
+		m.add_theme_constant_override(s, 22)
+	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_respawn_panel.add_child(m)
+	_respawn_label = Label.new()
+	_tune_label(_respawn_label, 26, Color(1, 1, 1))
+	_respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	m.add_child(_respawn_label)
+	_respawn_panel.visible = false
+
+
 ## Радиальная виньетка (прозрачный центр → чёрные края) через GradientTexture2D.
 func _make_vignette_tex() -> Texture2D:
 	var g := Gradient.new()
@@ -359,6 +423,85 @@ func _process(delta: float) -> void:
 	_update_power()
 	_update_ability()
 	_update_vitals()
+	_update_objective()
+
+
+## HP объекта под прицелом + полоса HP убежища (по наведению/<90%) + оверлей
+## возрождения (Этап 5.x).
+func _update_objective() -> void:
+	var aimed := _aimed_object()
+	var aim_is_shelter: bool = aimed != null and aimed.is_in_group("shelter_segment")
+
+	# Строка HP объекта под прицелом (над HP игрока, мелким шрифтом).
+	var cur := 0.0
+	var mx := 0.0
+	var nm := ""
+	if aim_is_shelter:
+		var sh := get_tree().get_first_node_in_group("shelter")
+		if is_instance_valid(sh):
+			cur = sh.get_health(); mx = sh.get_max_health(); nm = "Убежище"
+	elif aimed != null and aimed.is_in_group("building") and aimed.has_node("HealthComponent"):
+		var h: HealthComponent = aimed.get_node("HealthComponent")
+		cur = h.current_health; mx = h.max_health; nm = _obj_name(aimed)
+	if mx > 0.0:
+		_aim_hp_label.text = "%s  %d / %d" % [nm, cur, mx]
+		_aim_hp_label.visible = true
+	else:
+		_aim_hp_label.visible = false
+
+	# Полоса HP убежища — ТОЛЬКО при наведении на него ИЛИ если HP < 90%.
+	if _shelter_panel != null and _shelter_fill != null:
+		var sh2 := get_tree().get_first_node_in_group("shelter")
+		if is_instance_valid(sh2) and sh2.has_method("get_health_ratio"):
+			var ratio: float = sh2.get_health_ratio()
+			var show_bar: bool = aim_is_shelter or ratio < 0.9
+			_shelter_panel.visible = show_bar
+			if show_bar:
+				var w: float = _shelter_fill.get_parent().size.x - 4.0
+				_shelter_fill.size.x = maxf(0.0, w * ratio)
+				_shelter_fill.size.y = _shelter_fill.get_parent().size.y - 4.0
+				_shelter_fill.color = UiStyle.BAD if ratio < 0.3 else (UiStyle.WARN if ratio < 0.6 else UiStyle.GOOD)
+				_shelter_label.text = "УБЕЖИЩЕ: %d / %d" % [sh2.get_health(), sh2.get_max_health()]
+		else:
+			_shelter_panel.visible = false
+
+	# Оверлей возрождения.
+	if _respawn_panel != null:
+		var p := get_tree().get_first_node_in_group("player")
+		var dead: bool = is_instance_valid(p) and p.has_method("is_dead") and p.is_dead()
+		_respawn_panel.visible = dead
+		if dead:
+			_respawn_label.text = "Вы погибли\nВозрождение через %d с\n(режим наблюдателя — свободный полёт)" % ceili(p.get_respawn_left())
+
+
+## Объект под прицелом игрока (луч из камеры ~6 м). Нужен, чтобы показывать HP
+## только когда игрок подошёл и навёлся (Этап 5.x).
+func _aimed_object() -> Node:
+	var p := get_tree().get_first_node_in_group("player")
+	if not is_instance_valid(p) or not ("camera" in p):
+		return null
+	var cam: Camera3D = p.camera
+	if not is_instance_valid(cam):
+		return null
+	var from: Vector3 = cam.global_position
+	var to: Vector3 = from - cam.global_transform.basis.z * 6.0
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = [(p as CollisionObject3D).get_rid()]
+	var space := (p as Node3D).get_world_3d().direct_space_state
+	var hit: Dictionary = space.intersect_ray(q)
+	if hit.has("collider"):
+		return hit.collider
+	return null
+
+
+func _obj_name(n: Node) -> String:
+	if n.is_in_group("turret"): return "Турель"
+	if n.is_in_group("generator"): return "Генератор"
+	if n.is_in_group("workshop"): return "Мастерская"
+	if n.is_in_group("infirmary"): return "Лазарет"
+	if n.is_in_group("storage"): return "Склад"
+	if n.is_in_group("campfire"): return "Костёр"
+	return "Стена"
 
 
 ## Полосы HP и рассудка + виньетка (Этап UI-1/1B). Ширину заливки берём от
