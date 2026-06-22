@@ -29,7 +29,7 @@ var weapons: Array[Dictionary] = [
 	{"name": "Пистолет",          "damage": 10.0, "magazine_size": 8,  "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0,  "price": 0},
 	{"name": "Двойные пистолеты", "damage": 9.0,  "magazine_size": 16, "reload_time": 2.0, "range": 90.0,  "pellets": 1, "spread": 0.01, "price": 40},
 	{"name": "Дробовик",          "damage": 6.0,  "magazine_size": 4,  "reload_time": 2.2, "range": 20.0,  "pellets": 5, "spread": 0.05, "price": 50},
-	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90},
+	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90, "auto": true},
 	{"name": "Снайперка",         "damage": 40.0, "magazine_size": 5,  "reload_time": 3.0, "range": 300.0, "pellets": 1, "spread": 0.0,  "price": 120},
 ]
 var current_weapon_index: int = 0
@@ -60,6 +60,10 @@ var axe_equipped: bool = true             # на старте в руках то
 # медленный; классовые инструменты ускоряют (улучшенный топор — быстрее всех).
 @export var axe_swing_interval: float = 0.6
 var _swing_timer: float = 0.0
+
+# Авто-огонь (Автомат и др. с "auto": true): зажатый ЛКМ стреляет очередью.
+const AUTO_FIRE_INTERVAL := 0.12
+var _fire_cd: float = 0.0
 
 # Базовый максимум HP (из сцены) — к нему добавляется бонус класса Боец (4.12).
 var _base_max_health: float = 100.0
@@ -280,6 +284,17 @@ func _physics_process(delta: float) -> void:
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		swing_axe()
 
+	# Авто-огонь: со стволом, у которого "auto": true (Автомат), зажатый ЛКМ стреляет
+	# очередью с интервалом AUTO_FIRE_INTERVAL (правка автора — «это же автомат»).
+	if _fire_cd > 0.0:
+		_fire_cd -= delta
+	if not _capture_mode and not axe_equipped \
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and not build_system.build_mode and not _any_menu_open() \
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) \
+			and bool(weapons[current_weapon_index].get("auto", false)) and _fire_cd <= 0.0:
+		shoot()
+
 	# Притяжение к земле, пока не на полу.
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -367,6 +382,10 @@ func shoot() -> void:
 		print("Попадание: ", hits, " / ", pellets)
 	else:
 		print("Мимо")
+
+	# Темп автоматического огня (Автомат): следующий выстрел очереди — через интервал.
+	if bool(weapons[current_weapon_index].get("auto", false)):
+		_fire_cd = AUTO_FIRE_INTERVAL
 
 
 ## Перезарядка оружия (Этап 4.6.1): занимает reload_time секунд.
