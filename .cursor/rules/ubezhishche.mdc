@@ -1,0 +1,28 @@
+---
+description: Правила проекта «Убежище» (Godot 4.6.3) — язык, проверка через capture, git-процесс, грабли
+alwaysApply: true
+---
+
+# Проект «Убежище» — правила работы
+
+- **Язык:** всё на русском (чат, комментарии, коммиты, доки). Планы — в чат, не в отдельные файлы.
+- **Движок:** Godot 4.6.3 (GDScript). Репозиторий: https://github.com/kem4ikkk/ubeziche.git (`main`).
+  Автозагрузки: `InventorySystem`, `EventBus`, `CraftSystem`, `DebugCapture`.
+
+- **Проверять КАЖДУЮ правку через capture-прогон** (консольный exe):
+  1. при новых ассетах/`class_name`: `Godot_v4.6.3-stable_win64_console.exe --headless --path "d:/project 2" --import`
+  2. `Godot_v4.6.3-stable_win64_console.exe --path "d:/project 2" -- --capture 3`
+  3. читать `debug/last_run.png` + консоль; EXIT=0, без `SCRIPT ERROR`. Тесты — в `scripts/debug_capture.gd`.
+
+- **Git:** каждый под-этап = коммит+push в `origin/main`, подробное русское сообщение,
+  конец: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. `.uid`-файлы хранить.
+
+- **Грабли:** нетипизированные `get_*_in_group` → типизировать/кастовать при `:=`;
+  `class_name` виден только после `--import`; Pillow `pieslice/rectangle` без `fill` не рисует;
+  segfault на выходе прогона — флакость (повторить); слои: зомби=4, узлы добычи=16.
+
+- **Иконки:** `tools/gen_font_icons.py` (Segoe UI Symbol, монохром) + `tools/gen_icons.py`
+  (диски/кольца/glow/lock) → `assets/icons/`.
+
+Полные правила — в `.cursorrules`, контекст проекта — в `docs/handoff/HANDOFF.md`,
+журнал — `docs/PROGRESS.md`.
