@@ -51,6 +51,11 @@ var _reloading: bool = false
 @export var repair_amount: float = 15.0   # сколько HP восстанавливает один удар
 var _last_hit_pos: Vector3                # точка попадания луча топора (для ремонта в упор)
 
+# Видимые модели оружия (вьюмодел, правка автора): простые примитивы под камерой,
+# по одной на каждый ствол и на каждое оружие ближнего боя (топор/мачете/лом/молот).
+var _viewmodel: Node3D
+var _vm: Dictionary = {}
+
 # Топор (Этап 4.21): стартовый инструмент. Им добываем ресурсы (4.22), чиним
 # постройки и бьём зомби в ближнем бою. ЛКМ с топором → swing_axe().
 @export var axe_damage: float = 25.0      # урон топором по зомби за удар
@@ -140,6 +145,7 @@ func _ready() -> void:
 	_spawn_pos = global_position              # точка возрождения (Этап 5.x)
 	_orig_layer = collision_layer
 	_orig_mask = collision_mask
+	_build_viewmodels()                       # видимые модели оружия
 
 	# Класс Боец (Этап 4.12): +макс HP за уровень ветки «Бой». Базовый максимум
 	# берём из сцены один раз, бонус пересчитываем при смене навыков/класса.
@@ -846,3 +852,143 @@ func get_respawn_left() -> float:
 
 func get_respawn_total() -> float:
 	return _respawn_total
+
+
+# ==================== Видимые модели оружия (вьюмодел) ====================
+const _VM_GUN := Color(0.16, 0.17, 0.20)
+const _VM_METAL := Color(0.34, 0.35, 0.40)
+const _VM_WOOD := Color(0.44, 0.29, 0.15)
+const _VM_BLADE := Color(0.72, 0.74, 0.80)
+
+
+func _process(_dt: float) -> void:
+	_update_viewmodel()
+
+
+## Собираем по одной простой модели на каждый ствол и оружие ближнего боя.
+func _build_viewmodels() -> void:
+	_viewmodel = Node3D.new()
+	camera.add_child(_viewmodel)
+	_viewmodel.position = Vector3(0.30, -0.27, -0.48)
+	_viewmodel.rotation_degrees = Vector3(0, 3, 0)
+	_vm = {
+		"pistol": _vm_pistol(), "dual": _vm_dual(), "shotgun": _vm_shotgun(),
+		"rifle": _vm_rifle(), "sniper": _vm_sniper(),
+		"axe": _vm_axe(), "machete": _vm_machete(), "crowbar": _vm_crowbar(), "hammer": _vm_hammer(),
+	}
+	for k in _vm:
+		_viewmodel.add_child(_vm[k])
+		_vm[k].visible = false
+	_update_viewmodel()
+
+
+## Показываем модель активного оружия (топор/инструмент — если в руках ближний бой,
+## иначе текущий ствол). В режиме наблюдателя не показываем ничего.
+func _update_viewmodel() -> void:
+	if _viewmodel == null:
+		return
+	var key := ""
+	if _dead:
+		key = ""
+	elif axe_equipped:
+		if InventorySystem.has_hammer: key = "hammer"
+		elif InventorySystem.has_improved_axe: key = "crowbar"
+		elif InventorySystem.has_knife: key = "machete"
+		else: key = "axe"
+	else:
+		key = ["pistol", "dual", "shotgun", "rifle", "sniper"][clampi(current_weapon_index, 0, 4)]
+	for k in _vm:
+		_vm[k].visible = (k == key)
+
+
+func _vm_box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, rot := Vector3.ZERO) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.position = pos
+	mi.rotation_degrees = rot
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.metallic = 0.4
+	mat.roughness = 0.55
+	mi.material_override = mat
+	parent.add_child(mi)
+
+
+func _vm_pistol() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.05, 0.085, 0.20), Vector3(0, 0, -0.03), _VM_GUN)
+	_vm_box(n, Vector3(0.045, 0.11, 0.06), Vector3(0, -0.09, 0.05), _VM_GUN, Vector3(18, 0, 0))
+	return n
+
+
+func _vm_dual() -> Node3D:
+	var n := Node3D.new()
+	for sx in [-0.10, 0.10]:
+		_vm_box(n, Vector3(0.045, 0.075, 0.17), Vector3(sx, 0, -0.03), _VM_GUN)
+		_vm_box(n, Vector3(0.04, 0.095, 0.05), Vector3(sx, -0.08, 0.04), _VM_GUN, Vector3(18, 0, 0))
+	return n
+
+
+func _vm_shotgun() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.055, 0.075, 0.44), Vector3(0, 0, -0.10), _VM_GUN)
+	_vm_box(n, Vector3(0.05, 0.05, 0.12), Vector3(0, -0.055, -0.06), _VM_METAL)
+	_vm_box(n, Vector3(0.04, 0.09, 0.05), Vector3(0, -0.07, 0.13), _VM_WOOD, Vector3(20, 0, 0))
+	_vm_box(n, Vector3(0.04, 0.06, 0.14), Vector3(0, 0, 0.22), _VM_WOOD)
+	return n
+
+
+func _vm_rifle() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.05, 0.08, 0.5), Vector3(0, 0, -0.12), _VM_GUN)
+	_vm_box(n, Vector3(0.04, 0.13, 0.06), Vector3(0, -0.10, 0.0), _VM_METAL, Vector3(-12, 0, 0))
+	_vm_box(n, Vector3(0.04, 0.09, 0.05), Vector3(0, -0.07, 0.12), _VM_GUN, Vector3(20, 0, 0))
+	_vm_box(n, Vector3(0.04, 0.07, 0.14), Vector3(0, 0, 0.22), _VM_GUN)
+	_vm_box(n, Vector3(0.02, 0.02, 0.12), Vector3(0, 0.02, -0.42), _VM_METAL)
+	return n
+
+
+func _vm_sniper() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.045, 0.07, 0.62), Vector3(0, 0, -0.16), _VM_GUN)
+	_vm_box(n, Vector3(0.036, 0.036, 0.16), Vector3(0, 0.065, -0.06), _VM_METAL)
+	_vm_box(n, Vector3(0.04, 0.09, 0.05), Vector3(0, -0.07, 0.14), _VM_GUN, Vector3(20, 0, 0))
+	_vm_box(n, Vector3(0.04, 0.07, 0.16), Vector3(0, 0, 0.26), _VM_WOOD)
+	_vm_box(n, Vector3(0.018, 0.018, 0.16), Vector3(0, 0.01, -0.5), _VM_METAL)
+	return n
+
+
+func _vm_axe() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.028, 0.5, 0.028), Vector3(0, 0, 0), _VM_WOOD)
+	_vm_box(n, Vector3(0.16, 0.11, 0.03), Vector3(0.06, 0.22, 0), _VM_METAL)
+	n.position = Vector3(0.02, 0.04, -0.06)
+	n.rotation_degrees = Vector3(-8, 0, 20)
+	return n
+
+
+func _vm_machete() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.02, 0.055, 0.42), Vector3(0, 0.02, -0.18), _VM_BLADE)
+	_vm_box(n, Vector3(0.032, 0.032, 0.12), Vector3(0, 0, 0.06), _VM_WOOD)
+	n.rotation_degrees = Vector3(-6, 0, 8)
+	return n
+
+
+func _vm_crowbar() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.028, 0.028, 0.5), Vector3(0, 0, -0.06), _VM_METAL)
+	_vm_box(n, Vector3(0.028, 0.10, 0.028), Vector3(0, 0.05, -0.30), _VM_METAL, Vector3(35, 0, 0))
+	n.rotation_degrees = Vector3(-6, 0, 14)
+	return n
+
+
+func _vm_hammer() -> Node3D:
+	var n := Node3D.new()
+	_vm_box(n, Vector3(0.028, 0.36, 0.028), Vector3(0, 0, 0), _VM_WOOD)
+	_vm_box(n, Vector3(0.10, 0.085, 0.10), Vector3(0, 0.18, 0), _VM_METAL)
+	n.position = Vector3(0.02, 0.04, -0.06)
+	n.rotation_degrees = Vector3(-8, 0, 20)
+	return n
