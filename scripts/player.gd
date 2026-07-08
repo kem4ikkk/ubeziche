@@ -47,8 +47,9 @@ var current_ammo: int = magazine_size
 var _reloading: bool = false
 
 # Ремонт построек — теперь бесплатным ударом топора (Этап 4.21), без траты дерева.
-@export var repair_range: float = 2.0     # радиус ремонта (чуть дальше упора, м)
+@export var repair_range: float = 1.5     # ремонт только в упор — надо стоять вплотную (м)
 @export var repair_amount: float = 15.0   # сколько HP восстанавливает один удар
+var _last_hit_pos: Vector3                # точка попадания луча топора (для ремонта в упор)
 
 # Топор (Этап 4.21): стартовый инструмент. Им добываем ресурсы (4.22), чиним
 # постройки и бьём зомби в ближнем бою. ЛКМ с топором → swing_axe().
@@ -514,7 +515,11 @@ func swing_axe() -> void:
 			print("Удар топором по зомби: -", dmg, " HP")
 			return
 		if target.is_in_group("building") and target.has_method("repair"):
-			_repair_building(target)
+			# Ремонт только В УПОР: точка попадания должна быть близко к игроку.
+			if global_position.distance_to(_last_hit_pos) <= repair_range:
+				_repair_building(target)
+			else:
+				print("CLAUDE: для ремонта нужно подойти вплотную к постройке")
 			return
 	# Луч мимо (стены низкие) — чиним ближайшую постройку в радиусе.
 	var nearest := _nearest_building()
@@ -545,6 +550,7 @@ func _axe_raycast_target() -> Node:
 	query.collide_with_bodies = true
 	var result := space_state.intersect_ray(query)
 	if result:
+		_last_hit_pos = result.position     # точка попадания (для проверки «в упор» при ремонте)
 		return result.collider
 	return null
 

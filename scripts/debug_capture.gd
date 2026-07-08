@@ -760,7 +760,14 @@ func _run_capture(args: PackedStringArray) -> void:
 				await get_tree().create_timer(0.1).timeout
 				var hp_a0: float = wall_a.health.current_health
 				var wood_a0: int = InventorySystem.get_resource("wood")
-				player.swing_axe()   # игрок рядом — чинит ближайшую постройку бесплатно
+				# Ремонт теперь только В УПОР (правка 5.x) — придвигаем игрока к стене.
+				var rf: Vector3 = -((player as Node3D).global_transform.basis.z)
+				rf.y = 0.0
+				if rf.length() > 0.01: rf = rf.normalized()
+				var wpos: Vector3 = (wall_a as Node3D).global_position
+				(player as Node3D).global_position = Vector3(wpos.x - rf.x, 1.0, wpos.z - rf.z)
+				await get_tree().create_timer(0.05).timeout
+				player.swing_axe()   # игрок вплотную — чинит ближайшую постройку бесплатно
 				await get_tree().create_timer(0.1).timeout
 				print("  ремонт топором: HP ", hp_a0, " → ", wall_a.health.current_health,
 						" (+", player.repair_amount, "); дерево ", wood_a0, " → ",
