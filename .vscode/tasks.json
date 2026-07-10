@@ -24,6 +24,17 @@
       "problemMatcher": []
     },
     {
+      // ⬇ Импорт ассетов. Нужен после добавления новых картинок/сцен или нового
+      //   class_name (иначе Godot ругается «Identifier ... not declared»).
+      "label": "⬇ Импорт ассетов",
+      "type": "process",
+      "command": "D:/Godot/Godot_v4.6.3-stable_win64_console.exe",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--import"],
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
       // ✏️ Открыть проект в редакторе Godot (GUI).
       "label": "✏️ Открыть редактор Godot",
       "type": "process",
@@ -39,6 +50,22 @@
       "type": "process",
       "command": "D:/Godot/Godot_v4.6.3-stable_win64_console.exe",
       "args": ["--path", "${workspaceFolder}", "--", "--capture"],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      // 🤖 Прогон-обёртка для ИИ-ассистента: импорт (при необходимости) + capture +
+      //   разбор вывода (PASS/FAIL, путь к скриншоту). Это то, что ИИ запускает сам
+      //   после правок кода. Скриншот → debug/last_run.png.
+      "label": "🤖 Прогон для ИИ (импорт + скриншот)",
+      "type": "process",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/tools/capture.ps1",
+        "-Seconds", "3"
+      ],
+      "group": "build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
       "problemMatcher": []
     }
