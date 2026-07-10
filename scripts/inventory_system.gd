@@ -86,37 +86,37 @@ const BRANCH_ORDER := ["combat", "gather", "engineer"]
 #   ready: реализован ли эффект (false → в UI помечается «скоро»).
 const SKILLS := {
 	# --- Бой ---
-	"weapon_basic":     {"branch": "combat", "name": "Мастер оружия (нач.)", "icon": "pistol", "max": 3, "kind": "normal", "ready": false, "desc": "Оружие нач. уровня; +урон; −15% цена."},
-	"weapon_mid":       {"branch": "combat", "name": "Мастер оружия (средн.)", "icon": "rifle", "max": 3, "kind": "normal", "ready": false, "desc": "Винтовки/снайперки; +урон; −20% цена."},
-	"weapon_adv":       {"branch": "combat", "name": "Мастер оружия (продв.)", "icon": "mg", "max": 3, "kind": "normal", "ready": false, "desc": "Пулемёты/снаряжение; +урон; −25% цена."},
-	"combat_reinforce": {"branch": "combat", "name": "Боевое подкрепление", "icon": "magazine", "max": 1, "kind": "normal", "ready": false, "desc": "Ёмкость магазина +50%."},
+	"weapon_basic":     {"branch": "combat", "name": "Мастер оружия (нач.)", "icon": "pistol", "max": 3, "kind": "normal", "ready": true, "desc": "Пистолеты: урон +10%/ур; цена −15%/ур."},
+	"weapon_mid":       {"branch": "combat", "name": "Мастер оружия (средн.)", "icon": "rifle", "max": 3, "kind": "normal", "ready": true, "desc": "Дробовик/снайперка: урон +10%/ур; цена −20%/ур."},
+	"weapon_adv":       {"branch": "combat", "name": "Мастер оружия (продв.)", "icon": "mg", "max": 3, "kind": "normal", "ready": true, "desc": "Автомат: урон +10%/ур; цена −25%/ур."},
+	"combat_reinforce": {"branch": "combat", "name": "Боевое подкрепление", "icon": "magazine", "max": 1, "kind": "normal", "ready": true, "desc": "Ёмкость магазина +50%."},
 	"combat_mastery":   {"branch": "combat", "name": "Боевое мастерство", "icon": "swords", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Боец». На верстаке доступно Мачете."},
-	"battlefield_expert": {"branch": "combat", "name": "Эксперт на поле боя", "icon": "ghost", "max": 2, "kind": "normal", "ready": false, "desc": "При низком HP — невидимость на время."},
+	"battlefield_expert": {"branch": "combat", "name": "Эксперт на поле боя", "icon": "ghost", "max": 2, "kind": "normal", "ready": true, "desc": "При HP ≤30% авто-невидимость 5/7 c (кулдаун)."},
 	"health_boost":     {"branch": "combat", "name": "Улучшение запаса HP", "icon": "heart", "max": 3, "kind": "normal", "ready": true, "desc": "Макс. HP: +15 / +30 / +45."},
-	"armor_improve":    {"branch": "combat", "name": "Улучшение бронежилета", "icon": "shield", "max": 3, "kind": "normal", "ready": false, "desc": "Прочность брони +20% / +150% / +200%."},
+	"armor_improve":    {"branch": "combat", "name": "Улучшение бронежилета", "icon": "shield", "max": 3, "kind": "normal", "ready": true, "desc": "Снижает урон по игроку: −10% / −20% / −30%."},
 	"special_weapon":   {"branch": "combat", "name": "Мастер особого оружия", "icon": "grenade", "max": 3, "kind": "normal", "ready": true, "desc": "Урон топора +4/ур; гранаты; −30% цена."},
 	"airstrike":        {"branch": "combat", "name": "Запрос на авиаудар", "icon": "jet", "max": 1, "kind": "signature", "ready": true, "desc": "Авиаудар (F): AoE 80, радиус 5, кд 25 с."},
 	# --- Выживание ---
 	"gather_basic":     {"branch": "gather", "name": "Мастерство сбора (нач.)", "icon": "pickaxe", "max": 3, "kind": "normal", "ready": true, "desc": "Сбор: ресурса за удар 2 / 3 / 4; +лимит."},
-	"gather_adv":       {"branch": "gather", "name": "Мастерство сбора (продв.)", "icon": "gem", "max": 3, "kind": "normal", "ready": false, "desc": "Сбор в особых местах; +скорость/кол-во."},
+	"gather_adv":       {"branch": "gather", "name": "Мастерство сбора (продв.)", "icon": "gem", "max": 3, "kind": "normal", "ready": true, "desc": "Ещё +1 ресурса за удар за каждый уровень."},
 	"hunter":           {"branch": "gather", "name": "Охотник", "icon": "beartrap", "max": 1, "kind": "normal", "ready": false, "desc": "Скорость установки ловушек и их урон +."},
 	"speed_boost":      {"branch": "gather", "name": "Повышение скорости", "icon": "speed", "max": 3, "kind": "normal", "ready": true, "desc": "Скорость передвижения +5% / +10% / +20%."},
 	"survival_mastery": {"branch": "gather", "name": "Мастерство выживания", "icon": "leaf", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Добытчик». На верстаке доступен Лом."},
 	"patience":         {"branch": "gather", "name": "Терпение", "icon": "hourglass", "max": 1, "kind": "normal", "ready": true, "desc": "Расход психздоровья ×0.5; при 50% HP +1%/с."},
-	"adventurer":       {"branch": "gather", "name": "Искатель приключений", "icon": "compass", "max": 3, "kind": "normal", "ready": false, "desc": "Быстрее находить дерево/сталь; видеть врагов."},
+	"adventurer":       {"branch": "gather", "name": "Искатель приключений", "icon": "compass", "max": 3, "kind": "normal", "ready": true, "desc": "Залежи дерева/стали дозревают быстрее и их больше."},
 	"campfire_skill":   {"branch": "gather", "name": "Походный костёр", "icon": "campfire", "max": 1, "kind": "normal", "ready": true, "desc": "Костёр восстанавливает HP и психздоровье."},
 	"scavenger":        {"branch": "gather", "name": "Мусорщик", "icon": "moneybag", "max": 1, "kind": "normal", "ready": true, "desc": "Больше шанс ресурсов и денег с зомби."},
-	"camouflage":       {"branch": "gather", "name": "Маскировка", "icon": "leaves", "max": 1, "kind": "signature", "ready": false, "desc": "Невидимость для врагов 15 с (F)."},
+	"camouflage":       {"branch": "gather", "name": "Маскировка", "icon": "leaves", "max": 1, "kind": "signature", "ready": true, "desc": "Невидимость для врагов 15 с (F), кулдаун 30 с."},
 	# --- Инженер ---
 	"field_repair":     {"branch": "engineer", "name": "Ремонт на поле боя", "icon": "wrench", "max": 3, "kind": "normal", "ready": true, "desc": "Ремонт построек +5% / +10% / +15%."},
-	"engineer_mid":     {"branch": "engineer", "name": "Инженер (средн.)", "icon": "tower", "max": 3, "kind": "normal", "ready": false, "desc": "Башня связи; +скорость/прочность построек."},
-	"recycling":        {"branch": "engineer", "name": "Переработка", "icon": "recycle", "max": 1, "kind": "normal", "ready": false, "desc": "Сбор ресурсов после разрушения построек."},
-	"engineer_basic":   {"branch": "engineer", "name": "Инженер (нач.)", "icon": "gear", "max": 3, "kind": "normal", "ready": false, "desc": "Верстак; +скорость/прочность построек."},
+	"engineer_mid":     {"branch": "engineer", "name": "Инженер (средн.)", "icon": "tower", "max": 3, "kind": "normal", "ready": true, "desc": "Урон турелей +5% / +10% / +15%."},
+	"recycling":        {"branch": "engineer", "name": "Переработка", "icon": "recycle", "max": 1, "kind": "normal", "ready": true, "desc": "При уничтожении постройки возвращается 50% её ресурсов."},
+	"engineer_basic":   {"branch": "engineer", "name": "Инженер (нач.)", "icon": "gear", "max": 3, "kind": "normal", "ready": true, "desc": "Прочность (HP) новых построек +10%/ур."},
 	"tech_mastery":     {"branch": "engineer", "name": "Техническое мастерство", "icon": "toolcross", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Инженер». На верстаке доступен Молот."},
-	"engineer_expert":  {"branch": "engineer", "name": "Инженер-эксперт", "icon": "factory", "max": 3, "kind": "normal", "ready": false, "desc": "Бетонный завод; +скорость/прочность тир3."},
+	"engineer_expert":  {"branch": "engineer", "name": "Инженер-эксперт", "icon": "factory", "max": 3, "kind": "normal", "ready": true, "desc": "Скорострельность турелей +7% / +14% / +21%."},
 	"project_improve":  {"branch": "engineer", "name": "Улучшение проекта", "icon": "blueprint", "max": 3, "kind": "normal", "ready": true, "desc": "Меньше ресурсов на постройку."},
-	"electrician":      {"branch": "engineer", "name": "Инженер-электрик", "icon": "bolt", "max": 1, "kind": "normal", "ready": false, "desc": "Меньше энергии на новые постройки."},
-	"skilled_builder":  {"branch": "engineer", "name": "Умелый строитель", "icon": "bricks", "max": 1, "kind": "normal", "ready": false, "desc": "При высоком психздоровье +скорость стройки."},
+	"electrician":      {"branch": "engineer", "name": "Инженер-электрик", "icon": "bolt", "max": 1, "kind": "normal", "ready": true, "desc": "Турели потребляют на 20% меньше мощности."},
+	"skilled_builder":  {"branch": "engineer", "name": "Умелый строитель", "icon": "bricks", "max": 1, "kind": "normal", "ready": true, "desc": "При высоком психздоровье постройки прочнее (+20% HP)."},
 	"demolition":       {"branch": "engineer", "name": "Команда подрывников", "icon": "dynamite", "max": 1, "kind": "signature", "ready": true, "desc": "C4 (F): крафт на верстаке, рвёт любой объект."},
 }
 
@@ -174,9 +174,55 @@ func get_resource_cap() -> int:
 	return RESOURCE_CAP + 20 * int(skill_levels.get("gather_basic", 0))
 
 
-## Сколько ресурса даёт один удар топором по узлу: база 1 + уровень «Мастерства сбора».
+## Сколько ресурса даёт один удар топором по узлу: база 1 + «Мастерство сбора»
+## (нач.) + «Мастерство сбора» (продв.) (Этап 4.41).
 func gather_yield() -> int:
-	return 1 + int(skill_levels.get("gather_basic", 0))
+	return 1 + get_skill_level("gather_basic") + get_skill_level("gather_adv")
+
+
+## --- Эффекты навыков дерева (Этап 4.41): централизованные множители, чтобы
+## игровые системы (оружие/турели/постройки) читали бонусы из одного места. ---
+
+## Класс оружия → id навыка «Мастер оружия».
+func _weapon_skill_of(tier: String) -> String:
+	return {"basic": "weapon_basic", "mid": "weapon_mid", "adv": "weapon_adv"}.get(tier, "")
+
+## Множитель урона оружия по его классу (basic/mid/adv): +10% за уровень.
+func weapon_damage_mult(tier: String) -> float:
+	return 1.0 + 0.10 * get_skill_level(_weapon_skill_of(tier))
+
+## Множитель цены оружия на чёрном рынке (дешевле с навыком; не ниже 10% цены).
+func weapon_price_mult(tier: String) -> float:
+	var per: float = {"basic": 0.15, "mid": 0.20, "adv": 0.25}.get(tier, 0.0)
+	return maxf(0.1, 1.0 - per * get_skill_level(_weapon_skill_of(tier)))
+
+## +50% к ёмкости магазина — «Боевое подкрепление».
+func magazine_mult() -> float:
+	return 1.5 if get_skill_level("combat_reinforce") > 0 else 1.0
+
+## Доля снижения входящего урона по игроку — «Улучшение бронежилета».
+func armor_reduction() -> float:
+	return [0.0, 0.10, 0.20, 0.30][clampi(get_skill_level("armor_improve"), 0, 3)]
+
+## Множитель прочности (макс HP) постройки при установке: «Инженер (нач.)»
+## +10%/ур и «Умелый строитель» +20% при высоком психздоровье.
+func building_hp_mult(high_sanity: bool) -> float:
+	var m := 1.0 + 0.10 * get_skill_level("engineer_basic")
+	if high_sanity and get_skill_level("skilled_builder") > 0:
+		m += 0.20
+	return m
+
+## Множитель урона турелей — «Инженер (средн.)» +5%/ур.
+func turret_damage_mult() -> float:
+	return 1.0 + 0.05 * get_skill_level("engineer_mid")
+
+## Множитель интервала стрельбы турелей (меньше = быстрее) — «Инженер-эксперт» −7%/ур.
+func turret_fire_interval_mult() -> float:
+	return maxf(0.4, 1.0 - 0.07 * get_skill_level("engineer_expert"))
+
+## Множитель потребления мощности турелями — «Инженер-электрик» −20%.
+func power_cost_mult() -> float:
+	return 0.8 if get_skill_level("electrician") > 0 else 1.0
 
 
 ## Использовать ресурсы для крафта (возвращает true если достаточно).

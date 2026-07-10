@@ -128,7 +128,59 @@ func try_place() -> bool:
 	var building := scene.instantiate()
 	get_tree().current_scene.add_child(building)
 	building.global_position = _ghost.global_position
+	_apply_build_bonuses(building)
+	_setup_recycling(building, cost)
 	return true
+
+
+## Бонусы инженерных навыков к прочности постройки при установке (Этап 4.41):
+## «Инженер (нач.)» +10%/ур и «Умелый строитель» +20% при высоком психздоровье.
+func _apply_build_bonuses(building: Node) -> void:
+	var hc := _find_health(building)
+	if hc == null:
+		return
+	var high_sanity := false
+	if is_instance_valid(_player) and _player.has_method("get_sanity_ratio"):
+		high_sanity = _player.get_sanity_ratio() > 0.7
+	var mult: float = InventorySystem.building_hp_mult(high_sanity)
+	if mult <= 1.0:
+		return
+	hc.max_health *= mult
+	hc.current_health = hc.max_health
+	hc.health_changed.emit(hc.current_health, hc.max_health)
+
+
+## Найти дочерний HealthComponent постройки (для бонусов прочности).
+func _find_health(node: Node) -> HealthComponent:
+	for c in node.get_children():
+		if c is HealthComponent:
+			return c
+	return null
+
+
+## Переработка (Этап 4.42): при навыке «Переработка» уничтожение постройки
+## возвращает часть ресурсов, потраченных на неё. Подключаемся к сигналу died
+## её HealthComponent прямо при установке — без правки скриптов самих построек.
+func _setup_recycling(building: Node, cost: Dictionary) -> void:
+	var hc := _find_health(building)
+	if hc == null:
+		return
+	var cost_copy: Dictionary = cost.duplicate()
+	hc.died.connect(func() -> void: _refund_on_destroy(cost_copy))
+
+
+## Вернуть ~50% стоимости постройки, если прокачана «Переработка» (Этап 4.42).
+func _refund_on_destroy(cost: Dictionary) -> void:
+	if InventorySystem.get_skill_level("recycling") <= 0:
+		return
+	var parts: PackedStringArray = []
+	for res in cost:
+		var back: int = int(ceil(float(cost[res]) * 0.5))
+		if back > 0:
+			InventorySystem.add_resource(res, back)
+			parts.append("%s +%d" % [res, back])
+	if not parts.is_empty():
+		print("Переработка: возвращены ресурсы при сносе — ", ", ".join(parts))
 
 
 ## Занята ли точка существующей постройкой/стеной/периметром (Этап 4.31): физ.

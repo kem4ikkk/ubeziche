@@ -33,6 +33,37 @@ func _run_capture(args: PackedStringArray) -> void:
 	await get_tree().create_timer(0.5).timeout
 	_dump_state("ДО действий")
 
+	# 1.05) Баг-фиксы 2026-07-10 — проверяем РАНО, пока периметр цел и день:
+	# (а) ремонт убежища «в упор» (горизонтальная дистанция вместо 3D);
+	# (б) психздоровье не падает у стен ВНУТРИ убежища (тёплой считается вся
+	# площадь периметра, а не круг радиусом 6.5 м от центра).
+	var player0 := get_tree().get_first_node_in_group("player")
+	if is_instance_valid(player0):
+		print("CLAUDE: проверяю баг-фиксы (ремонт в упор + тепло у стен)")
+		var shelter0 := get_tree().get_first_node_in_group("shelter")
+		if is_instance_valid(shelter0):
+			shelter0.take_damage(150.0)
+			var sh_before: float = shelter0.get_health()
+			player0.equip_axe()
+			player0._swing_timer = 0.0
+			(player0 as Node3D).global_position = Vector3(-7.0, 0.0, 0.0)
+			(player0 as Node3D).look_at(Vector3(-8.0, 0.0, 0.0), Vector3.UP)
+			await get_tree().physics_frame
+			player0.swing_axe()
+			print("  ремонт убежища в упор к стене: HP ", snappedf(sh_before, 0.1),
+					" → ", snappedf(shelter0.get_health(), 0.1), " (ожид. больше)")
+			shelter0.repair(100000.0)   # вернуть полный HP, не мешая дальнейшим тестам
+		player0.sanity = 50.0
+		(player0 as Node3D).global_position = Vector3(7.5, 0.0, 0.0)   # внутри, у восточной стены
+		var in_base: bool = player0._is_in_hearth()
+		for i in 2: player0._update_sanity(1.0)
+		print("  у восточной стены внутри: в тепле=", in_base,
+				", рассудок 50 → ", snappedf(player0.get_sanity(), 0.1), " (не должен падать)")
+		# Вернём игрока на старт (позиция/поворот/рассудок), чтобы сцены шли как раньше.
+		(player0 as Node3D).global_position = Vector3(0.0, 0.0, 5.0)
+		(player0 as Node3D).rotation = Vector3.ZERO
+		player0.sanity = player0.SANITY_MAX
+
 	# 1.1) Правка (4.30): мастерская и генератор НЕ предустановлены — их строит
 	# игрок сам. Узлы добычи спавнятся СЛУЧАЙНО (resource_spawner), а не на
 	# фиксированных местах.
@@ -1304,6 +1335,55 @@ func _run_capture(args: PackedStringArray) -> void:
 		player._respawn()
 		print("  после возрождения: is_dead=", player.is_dead(), " HP=", snappedf(player.get_health(), 0.1))
 		_dump_state("ПОСЛЕ убежища/возрождения (5.x)")
+
+	# 6.9997) Оживление навыков-заглушек (Этап 4.41): проверяем эффекты новых
+	# рабочих узлов дерева — ставим уровни напрямую и печатаем полученные значения.
+	if is_instance_valid(player):
+		print("CLAUDE: проверяю оживлённые навыки (4.41)")
+		InventorySystem.reset_run_progression()
+		InventorySystem.skill_points = 99
+		var sl: Dictionary = InventorySystem.skill_levels
+		# --- Бой: магазин, урон/цена оружия, броня ---
+		sl["combat_reinforce"] = 1
+		sl["weapon_basic"] = 2
+		sl["weapon_mid"] = 1
+		sl["armor_improve"] = 3
+		player._apply_weapon(0)   # пистолет (класс basic)
+		print("  combat_reinforce: магазин пистолета = ", player.magazine_size, " (база 8 → 12)")
+		print("  weapon_basic 2: урон пистолета = ", snappedf(player.damage, 0.1), " (база 10 → 12)")
+		print("  weapon_mid 1: цена дробовика = ", player.get_weapon_price(2), "$ (база 50 → 40)")
+		print("  armor_improve 3: снижение урона = ", int(InventorySystem.armor_reduction() * 100), "%")
+		# --- Выживание: маскировка и сбор ---
+		InventorySystem.player_class = "gather"
+		InventorySystem.has_camouflage = true
+		player._camo_cd = 0.0
+		player._camouflage()
+		print("  camouflage: невидим для врагов = ", player.is_invisible())
+		sl["gather_basic"] = 1
+		sl["gather_adv"] = 2
+		print("  gather_adv: ресурса за удар = ", InventorySystem.gather_yield(), " (1+1+2=4)")
+		# --- Технология: турели, прочность построек, питание ---
+		sl["battlefield_expert"] = 2
+		sl["engineer_mid"] = 3
+		sl["engineer_expert"] = 3
+		sl["engineer_basic"] = 2
+		sl["skilled_builder"] = 1
+		sl["electrician"] = 1
+		print("  engineer_mid 3: урон турелей = x", snappedf(InventorySystem.turret_damage_mult(), 0.01))
+		print("  engineer_expert 3: интервал турелей = x", snappedf(InventorySystem.turret_fire_interval_mult(), 0.01))
+		print("  engineer_basic 2: прочность построек = x", snappedf(InventorySystem.building_hp_mult(false), 0.01))
+		print("  skilled_builder: прочность при высоком рассудке = x", snappedf(InventorySystem.building_hp_mult(true), 0.01))
+		print("  electrician: потребление мощности = x", snappedf(InventorySystem.power_cost_mult(), 0.01))
+		sl["recycling"] = 1
+		var bsys: Node = player.build_system   # типизируем: player нетипизирован (грабля :=)
+		if bsys and bsys.has_method("_refund_on_destroy"):
+			var w0: int = InventorySystem.get_resource("wood")
+			var s0: int = InventorySystem.get_resource("steel")
+			bsys._refund_on_destroy({"wood": 2, "steel": 3})
+			print("  recycling: возврат при сносе (2w/3s) → +",
+					InventorySystem.get_resource("wood") - w0, "w +",
+					InventorySystem.get_resource("steel") - s0, "s (ожид. +1w +2s)")
+		_dump_state("ПОСЛЕ оживления навыков (4.41)")
 
 	# 6.999) Финал: показываем дерево навыков (ёлочка) на снимке — проходим полную
 	# цепочку Инженера + немного в других ветках, чтобы видеть открытые/закрытые/

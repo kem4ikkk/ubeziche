@@ -19,6 +19,8 @@ func _ready() -> void:
 ## центральная цель получает turret_damage, остальные в splash_radius — splash_damage.
 func _try_fire(target: Node3D) -> void:
 	var impact := target.global_position
+	# «Инженер (средн.)» (Этап 4.41) усиливает урон турелей, включая мортиру.
+	var mult: float = InventorySystem.turret_damage_mult()
 	var hit_count := 0
 	for enemy in get_tree().get_nodes_in_group("enemy"):
 		if not (enemy is Node3D) or not enemy.has_method("take_damage"):
@@ -26,7 +28,7 @@ func _try_fire(target: Node3D) -> void:
 		var e := enemy as Node3D
 		if e.global_position.distance_to(impact) > splash_radius:
 			continue
-		e.take_damage(turret_damage if e == target else splash_damage)
+		e.take_damage((turret_damage if e == target else splash_damage) * mult)
 		hit_count += 1
 	print("Мортира бьёт по площади (накрыто целей: ", hit_count, ")")
 

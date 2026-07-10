@@ -108,5 +108,5 @@ func _weapon_offer_text() -> String:
 		if index < 0:
 			return "всё куплено"
 		var w: Dictionary = player.weapons[index]
-		return "%s (%d$)" % [w.name, int(w.get("price", 0))]
+		return "%s (%d$)" % [w.name, player.get_weapon_price(index)]
 	return "оружие"

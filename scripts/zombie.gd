@@ -63,8 +63,13 @@ func _physics_process(delta: float) -> void:
 	# бьют постройки/стены, которые им мешают (это и снимает HP убежища).
 	var player_alive: bool = is_instance_valid(_player) and _player.is_inside_tree() \
 			and not (_player.has_method("is_dead") and _player.is_dead())
+	# «Маскировка»/«Эксперт на поле боя» (Этап 4.41): невидимого игрока зомби не
+	# видят — ведут себя как при отсутствии игрока (идут крушить убежище).
+	var invisible: bool = is_instance_valid(_player) and _player.has_method("is_invisible") \
+			and _player.is_invisible()
+	var chase_player: bool = player_alive and not invisible
 	var target_pos: Vector3
-	if player_alive:
+	if chase_player:
 		target_pos = _player.global_position
 	else:
 		var seg := _nearest_shelter_segment()
@@ -86,8 +91,8 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	# Живой игрок в упор — кусаем его.
-	if player_alive:
+	# Живой ВИДИМЫЙ игрок в упор — кусаем его.
+	if chase_player:
 		var to_player := _player.global_position - global_position
 		to_player.y = 0.0
 		if to_player.length() <= attack_range:

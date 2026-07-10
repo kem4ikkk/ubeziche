@@ -84,7 +84,14 @@ func _on_node_depleted(node: Node) -> void:
 ## Перезапустить таймер «дозрева» со случайным интервалом.
 func _arm_respawn_timer() -> void:
 	if is_instance_valid(_respawn_timer):
-		_respawn_timer.start(randf_range(respawn_min, respawn_max))
+		# «Искатель приключений» (Этап 4.41): залежи дозревают быстрее (−20%/ур).
+		var mult := maxf(0.3, 1.0 - 0.2 * _adventurer_level())
+		_respawn_timer.start(randf_range(respawn_min, respawn_max) * mult)
+
+
+## Уровень навыка «Искатель приключений» — ускоряет дозрев и поднимает лимит узлов.
+func _adventurer_level() -> int:
+	return InventorySystem.get_skill_level("adventurer")
 
 
 ## Тик «дозрева»: изредка добавляет ОДИН новый узел того типа, что под лимитом.
@@ -92,9 +99,10 @@ func _arm_respawn_timer() -> void:
 ## перезаряжаем таймер на новый случайный интервал.
 func _on_respawn_tick() -> void:
 	var candidates: Array[String] = []
-	if _count_of("wood") < wood_max:
+	var adv := _adventurer_level()   # «Искатель приключений» поднимает лимит узлов
+	if _count_of("wood") < wood_max + adv:
 		candidates.append("wood")
-	if _count_of("steel") < steel_max:
+	if _count_of("steel") < steel_max + adv:
 		candidates.append("steel")
 	if not candidates.is_empty():
 		_spawn(candidates[randi() % candidates.size()])

@@ -52,16 +52,16 @@ func _physics_process(delta: float) -> void:
 
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:
-		_fire_timer = fire_interval
+		# «Инженер-эксперт» (Этап 4.41) ускоряет стрельбу турелей.
+		_fire_timer = fire_interval * InventorySystem.turret_fire_interval_mult()
 		_try_fire(target)
 
 
 ## Стреляем по цели (Этап 4.25: без боезапаса, только при наличии питания —
 ## проверка _has_power уже сделана в _physics_process).
-## Урон турели. Бонус к урону турелей даёт «Молот» (Техническое мастерство) —
-## будет подключён отдельной стадией; пока базовый урон.
+## Урон турели с учётом навыка «Инженер (средн.)» (+5%/ур урона турелей, Этап 4.41).
 func _try_fire(target: Node3D) -> void:
-	var dmg := turret_damage
+	var dmg := turret_damage * InventorySystem.turret_damage_mult()
 	if target.has_method("take_damage"):
 		target.take_damage(dmg)
 	print("Турель стреляет (-", dmg, " HP)")
@@ -78,9 +78,12 @@ func _has_power() -> bool:
 			supply += g.get_power_output()
 	if supply <= 0:
 		return false
+	# «Инженер-электрик» (Этап 4.41) снижает потребление мощности турелями.
 	var used := 0
+	var mult: float = InventorySystem.power_cost_mult()
 	for t in get_tree().get_nodes_in_group("turret"):
-		used += int(t.power_cost) if "power_cost" in t else 30
+		var pc: int = int(t.power_cost) if "power_cost" in t else 30
+		used += int(ceil(pc * mult))
 		if t == self:
 			break
 	return used <= supply

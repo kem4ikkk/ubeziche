@@ -25,12 +25,14 @@ signal weapon_changed(weapon_name: String)
 
 # Виды оружия (Этап 4.6.2): пистолет — сбалансирован, дробовик — несколько
 # пуль с разбросом, больше урона вблизи, но короче дальность и меньше обойма.
+# Класс оружия "tier" (Этап 4.41): к нему привязаны навыки «Мастер оружия»
+# (basic — пистолеты, mid — дробовик/снайперка, adv — автомат).
 var weapons: Array[Dictionary] = [
-	{"name": "Пистолет",          "damage": 10.0, "magazine_size": 8,  "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0,  "price": 0},
-	{"name": "Двойные пистолеты", "damage": 9.0,  "magazine_size": 16, "reload_time": 2.0, "range": 90.0,  "pellets": 1, "spread": 0.01, "price": 40},
-	{"name": "Дробовик",          "damage": 6.0,  "magazine_size": 4,  "reload_time": 2.2, "range": 20.0,  "pellets": 5, "spread": 0.05, "price": 50},
-	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90, "auto": true},
-	{"name": "Снайперка",         "damage": 40.0, "magazine_size": 5,  "reload_time": 3.0, "range": 300.0, "pellets": 1, "spread": 0.0,  "price": 120},
+	{"name": "Пистолет",          "damage": 10.0, "magazine_size": 8,  "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0,  "price": 0,   "tier": "basic"},
+	{"name": "Двойные пистолеты", "damage": 9.0,  "magazine_size": 16, "reload_time": 2.0, "range": 90.0,  "pellets": 1, "spread": 0.01, "price": 40,  "tier": "basic"},
+	{"name": "Дробовик",          "damage": 6.0,  "magazine_size": 4,  "reload_time": 2.2, "range": 20.0,  "pellets": 5, "spread": 0.05, "price": 50,  "tier": "mid"},
+	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90,  "auto": true, "tier": "adv"},
+	{"name": "Снайперка",         "damage": 40.0, "magazine_size": 5,  "reload_time": 3.0, "range": 300.0, "pellets": 1, "spread": 0.0,  "price": 120, "tier": "mid"},
 ]
 var current_weapon_index: int = 0
 var _ammo_in_weapon: Array[int] = []
@@ -87,6 +89,11 @@ var _airstrike_cd: float = 0.0
 @export var sprint_cooldown: float = 12.0
 var _sprint_timer: float = 0.0
 var _sprint_cd: float = 0.0
+# Невидимость (Этап 4.41): «Маскировка» (F, Добытчик) и «Эксперт на поле боя»
+# (Боец, авто при низком HP) делают игрока незаметным для зомби на время.
+var _invis_timer: float = 0.0
+var _camo_cd: float = 0.0
+var _battle_cd: float = 0.0
 # Заряд C4 (Инженер) — сцена, которую ставит игрок (Костёр стал постройкой B).
 @export var c4_scene: PackedScene
 @export var c4_place_range: float = 8.0   # на какую дальность по прицелу кладём C4
@@ -153,6 +160,9 @@ func _ready() -> void:
 	InventorySystem.skills_changed.connect(_apply_combat_hp)
 	InventorySystem.class_changed.connect(func(_c): _apply_combat_hp())
 	_apply_combat_hp()
+	# Навыки «Мастер оружия»/«Боевое подкрепление» меняют урон/магазин — при смене
+	# навыков пересобираем параметры текущего оружия (Этап 4.41).
+	InventorySystem.skills_changed.connect(_reapply_current_weapon)
 
 	# Инициализация оружия (Этап 4.6.2): у каждого оружия своя обойма.
 	# Стартует только пистолет (индекс 0), остальное покупается за деньги.
@@ -278,6 +288,15 @@ func _physics_process(delta: float) -> void:
 		_sprint_timer -= delta
 	if _sprint_cd > 0.0:
 		_sprint_cd -= delta
+
+	# Невидимость и её кулдауны (Этап 4.41): «Маскировка» и «Эксперт на поле боя».
+	if _invis_timer > 0.0:
+		_invis_timer -= delta
+	if _camo_cd > 0.0:
+		_camo_cd -= delta
+	if _battle_cd > 0.0:
+		_battle_cd -= delta
+	_update_battlefield_expert()
 
 	# Психическое здоровье (Этап 1B).
 	_update_sanity(delta)
@@ -470,7 +489,7 @@ func buy_weapon(index: int) -> bool:
 	if _owned[index]:
 		print("CLAUDE: оружие ", weapons[index].name, " уже куплено")
 		return false
-	var price: int = int(weapons[index].get("price", 0))
+	var price: int = get_weapon_price(index)
 	if not InventorySystem.spend_money(price):
 		print("CLAUDE: не хватает денег на ", weapons[index].name, " (нужно ", price, "$)")
 		return false
@@ -480,15 +499,32 @@ func buy_weapon(index: int) -> bool:
 	return true
 
 
+## Пересобрать параметры текущего оружия при смене навыков (Этап 4.41): урон
+## «Мастера оружия» и ёмкость «Боевого подкрепления» применяются сразу.
+func _reapply_current_weapon() -> void:
+	if _ammo_in_weapon.size() == weapons.size():
+		_apply_weapon(current_weapon_index)
+
+
+## Цена оружия с учётом навыков «Мастер оружия» (дешевле). Для чёрного рынка (Этап 4.41).
+func get_weapon_price(index: int) -> int:
+	if index < 0 or index >= weapons.size():
+		return 0
+	var tier: String = weapons[index].get("tier", "basic")
+	return int(round(float(weapons[index].get("price", 0)) * InventorySystem.weapon_price_mult(tier)))
+
+
 ## Применяет параметры оружия с индексом index как текущие.
 func _apply_weapon(index: int) -> void:
 	current_weapon_index = index
 	var weapon: Dictionary = weapons[index]
-	damage = weapon.damage
+	var tier: String = weapon.get("tier", "basic")
+	# Навыки «Мастер оружия» повышают урон, «Боевое подкрепление» — ёмкость магазина.
+	damage = float(weapon.damage) * InventorySystem.weapon_damage_mult(tier)
 	shoot_range = weapon.range
-	magazine_size = weapon.magazine_size
+	magazine_size = int(round(float(weapon.magazine_size) * InventorySystem.magazine_mult()))
 	reload_time = weapon.reload_time
-	current_ammo = _ammo_in_weapon[index]
+	current_ammo = mini(_ammo_in_weapon[index], magazine_size)
 
 
 ## Удар топором (Этап 4.21): луч из камеры — действуем по тому, на что смотрим.
@@ -521,8 +557,13 @@ func swing_axe() -> void:
 			print("Удар топором по зомби: -", dmg, " HP")
 			return
 		if target.is_in_group("building") and target.has_method("repair"):
-			# Ремонт только В УПОР: точка попадания должна быть близко к игроку.
-			if global_position.distance_to(_last_hit_pos) <= repair_range:
+			# Ремонт только В УПОР. Дистанцию считаем ПО ГОРИЗОНТАЛИ (баг-фикс
+			# 2026-07-10): камера на 1.6 м, начало координат игрока у ног, поэтому
+			# у высоких стен (убежище — 2 м) точка попадания луча высоко и полная
+			# 3D-дистанция ложно превышала repair_range → «в упор» не чинилось.
+			var flat_dist := Vector2(_last_hit_pos.x - global_position.x, \
+					_last_hit_pos.z - global_position.z).length()
+			if flat_dist <= repair_range:
 				_repair_building(target)
 			else:
 				print("CLAUDE: для ремонта нужно подойти вплотную к постройке")
@@ -598,9 +639,10 @@ func repair_target() -> void:
 	_repair_building(nearest)
 
 
-## Урон по игроку (например, от зомби).
+## Урон по игроку (например, от зомби). «Улучшение бронежилета» (Этап 4.41)
+## снижает входящий урон на 10/20/30%.
 func take_damage(amount: float) -> void:
-	health.take_damage(amount)
+	health.take_damage(amount * (1.0 - InventorySystem.armor_reduction()))
 
 
 ## Лечение игрока (Этап 4.7.3: покупка лечения в мастерской за деньги).
@@ -639,10 +681,28 @@ func _update_sanity(delta: float) -> void:
 	camera.fov = lerpf(_base_fov - SANITY_FOV_DROP, _base_fov, t)
 
 
-## В радиусе «очага» базы (вокруг центра карты, по горизонтали)?
+## Тёплая зона базы (Этап 1B; баг-фикс 2026-07-10). Раньше «очаг» был кругом
+## радиусом HEARTH_RADIUS от центра карты, но периметр убежища — квадрат ±8 м, и у
+## стен ВНУТРИ убежища рассудок падал. Теперь тёплым считается ВЕСЬ интерьер
+## периметра — по габаритному прямоугольнику сегментов стен. Нет периметра — старый круг.
 func _is_in_hearth() -> bool:
+	var segs := get_tree().get_nodes_in_group("shelter_segment")
+	if segs.is_empty():
+		var c := global_position
+		return Vector2(c.x, c.z).length() <= HEARTH_RADIUS
+	var min_x := INF
+	var max_x := -INF
+	var min_z := INF
+	var max_z := -INF
+	for s in segs:
+		if s is Node3D:
+			var sp: Vector3 = (s as Node3D).global_position
+			min_x = minf(min_x, sp.x)
+			max_x = maxf(max_x, sp.x)
+			min_z = minf(min_z, sp.z)
+			max_z = maxf(max_z, sp.z)
 	var p := global_position
-	return Vector2(p.x, p.z).length() <= HEARTH_RADIUS
+	return p.x >= min_x and p.x <= max_x and p.z >= min_z and p.z <= max_z
 
 
 ## Рядом ли горящий костёр (постройка), греющий игрока?
@@ -691,10 +751,36 @@ func use_class_ability() -> void:
 				_place_c4()
 
 
-## Маскировка (Добытчик, ультимейт ветки «Выживание») — эффект будет добавлен
-## позже (Этап 4.40+); пока заглушка.
+## Маскировка (Добытчик, сигнатура, Этап 4.41): невидимость для зомби на
+## CAMO_DURATION секунд, затем кулдаун. Пока активна — зомби нас «не видят»
+## (проверяют is_invisible() в zombie.gd) и идут крушить убежище.
+const CAMO_DURATION := 15.0
+const CAMO_COOLDOWN := 30.0
 func _camouflage() -> void:
-	print("Маскировка: эффект скоро (невидимость для врагов 15 с)")
+	if _camo_cd > 0.0:
+		print("CLAUDE: маскировка на кулдауне (", ceili(_camo_cd), " c)")
+		return
+	_invis_timer = maxf(_invis_timer, CAMO_DURATION)
+	_camo_cd = CAMO_COOLDOWN
+	print("Маскировка активна (невидимость для врагов ", CAMO_DURATION, " c)")
+
+
+## Невидим ли игрок для врагов сейчас (Маскировка / Эксперт на поле боя).
+func is_invisible() -> bool:
+	return _invis_timer > 0.0
+
+
+## «Эксперт на поле боя» (Боец, Этап 4.41): при HP ≤ 30% автоматически включает
+## короткую невидимость (дольше с уровнем), затем кулдаун — спасение в замесе.
+func _update_battlefield_expert() -> void:
+	var lvl := InventorySystem.get_skill_level("battlefield_expert")
+	if lvl <= 0 or _battle_cd > 0.0 or _invis_timer > 0.0:
+		return
+	if health.current_health > 0.0 and health.current_health <= health.max_health * 0.3:
+		var dur := 3.0 + 2.0 * lvl
+		_invis_timer = dur
+		_battle_cd = 20.0
+		print("Эксперт на поле боя: невидимость на ", dur, " c")
 
 
 ## Авиаудар (Боец): по точке прицела, с задержкой — AoE урон по зомби, кулдаун.
