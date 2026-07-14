@@ -7,6 +7,8 @@ extends CharacterBody3D
 ##   Space — прыжок
 ##   ЛКМ   — с топором: добыча/ремонт/ближний бой (swing_axe; можно ЗАЖАТЬ —
 ##           непрерывная рубка); со стволом: выстрел
+##   ПКМ   — тяжёлый удар топором: в 2.2× медленнее и в 2× сильнее ЛКМ по зомби;
+##           по постройке — СНОС (−15% макс. HP за удар), кроме убежища и мастерской
 ##   Q     — взять топор (Этап 4.21, стартовый инструмент)
 ##   R     — перезарядка оружия
 ##   1-5   — переключить оружие (только купленное; берётся вместо топора)
@@ -68,6 +70,14 @@ var axe_equipped: bool = true             # на старте в руках то
 # медленный; классовые инструменты ускоряют (улучшенный топор — быстрее всех).
 @export var axe_swing_interval: float = 0.6
 var _swing_timer: float = 0.0
+
+# Тяжёлый удар на ПКМ (правка автора): в 2.2× медленнее и в 2× сильнее обычного
+# удара ЛКМ по зомби. По постройке тяжёлый удар СНОСИТ её, снимая 15% МАКС. HP за
+# удар (ломать можно всё, кроме периметра убежища и мастерской). Разрушение своей
+# постройки триггерит навык «Переработка» (возврат ресурсов, см. build_system).
+const HEAVY_SWING_MULT := 2.2
+const HEAVY_DAMAGE_MULT := 2.0
+const DEMOLISH_HP_FRACTION := 0.15
 
 # Авто-огонь (Автомат и др. с "auto": true): зажатый ЛКМ стреляет очередью.
 const AUTO_FIRE_INTERVAL := 0.12
@@ -207,6 +217,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED  # заново захватываем курсор
 
+	# Правая кнопка мыши — ТЯЖЁЛЫЙ удар (только с топором, вне режима постройки и
+	# меню, при захваченном курсоре): 2.2× медленнее, 2× урон по зомби; постройку сносит.
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		if not _any_menu_open() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+				and axe_equipped and not build_system.build_mode:
+			swing_axe(true)
+
 	# B — открыть/закрыть меню построек (Этап 4.26). В режиме постройки B
 	# просто выходит из него. Само меню (build_menu.gd) выбирает постройку.
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_B:
@@ -310,6 +327,13 @@ func _physics_process(delta: float) -> void:
 			and not build_system.build_mode and not _any_menu_open() \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		swing_axe()
+
+	# Зажатая ПКМ с топором — непрерывный ТЯЖЁЛЫЙ удар (темп задаёт кулдаун ×2.2).
+	if not _capture_mode and axe_equipped \
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and not build_system.build_mode and not _any_menu_open() \
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		swing_axe(true)
 
 	# Авто-огонь: со стволом, у которого "auto": true (Автомат), зажатый ЛКМ стреляет
 	# очередью с интервалом AUTO_FIRE_INTERVAL (правка автора — «это же автомат»).
@@ -532,10 +556,11 @@ func _apply_weapon(index: int) -> void:
 ## (ремонт). Стены низкие (1 м), камера на 1.6 м — если луч прошёл мимо,
 ## чиним ближайшую постройку в радиусе repair_range.
 ## Кулдаун между ударами зависит от инструмента (Этап 4.27, _axe_swing_interval).
-func swing_axe() -> void:
+func swing_axe(heavy := false) -> void:
 	if _swing_timer > 0.0:
 		return  # ещё не отошли от прошлого удара (скорость атаки)
-	_swing_timer = _axe_swing_interval()
+	# Тяжёлый удар (ПКМ) — в HEAVY_SWING_MULT раз медленнее обычного (ЛКМ).
+	_swing_timer = _axe_swing_interval() * (HEAVY_SWING_MULT if heavy else 1.0)
 
 	var target := _axe_raycast_target()
 	if target != null:
@@ -553,27 +578,40 @@ func swing_axe() -> void:
 			var dmg := axe_damage + InventorySystem.get_skill_level("special_weapon") * 4.0
 			if InventorySystem.has_knife:
 				dmg += 10.0
+			if heavy:
+				dmg *= HEAVY_DAMAGE_MULT          # тяжёлый удар (ПКМ) — вдвое сильнее
 			target.take_damage(dmg)
-			print("Удар топором по зомби: -", dmg, " HP")
+			print("Удар топором по зомби: -", dmg, " HP", (" (тяжёлый)" if heavy else ""))
 			return
-		if target.is_in_group("building") and target.has_method("repair"):
-			# Ремонт только В УПОР. Дистанцию считаем ПО ГОРИЗОНТАЛИ (баг-фикс
-			# 2026-07-10): камера на 1.6 м, начало координат игрока у ног, поэтому
-			# у высоких стен (убежище — 2 м) точка попадания луча высоко и полная
-			# 3D-дистанция ложно превышала repair_range → «в упор» не чинилось.
-			var flat_dist := Vector2(_last_hit_pos.x - global_position.x, \
-					_last_hit_pos.z - global_position.z).length()
-			if flat_dist <= repair_range:
-				_repair_building(target)
-			else:
-				print("CLAUDE: для ремонта нужно подойти вплотную к постройке")
+		if target.is_in_group("building"):
+			# ЛКМ по постройке — РЕМОНТ; ПКМ (тяжёлый) — СНОС.
+			if heavy:
+				_try_demolish(target)
+			elif target.has_method("repair"):
+				# Ремонт только В УПОР. Дистанцию считаем ПО ГОРИЗОНТАЛИ (баг-фикс
+				# 2026-07-10): камера на 1.6 м, начало координат игрока у ног, поэтому
+				# у высоких стен (убежище — 2 м) точка попадания луча высоко и полная
+				# 3D-дистанция ложно превышала repair_range → «в упор» не чинилось.
+				var flat_dist := Vector2(_last_hit_pos.x - global_position.x, \
+						_last_hit_pos.z - global_position.z).length()
+				if flat_dist <= repair_range:
+					_repair_building(target)
+				else:
+					print("CLAUDE: для ремонта нужно подойти вплотную к постройке")
 			return
-	# Луч мимо (стены низкие) — чиним ближайшую постройку в радиусе.
-	var nearest := _nearest_building()
-	if nearest != null:
-		_repair_building(nearest)
+	# Луч прошёл мимо (стены низкие). ЛКМ — чиним, ПКМ — сносим ближайшую в упор.
+	if heavy:
+		var dem := _nearest_demolishable()
+		if dem != null:
+			_try_demolish(dem)
+		else:
+			print("CLAUDE: тяжёлый удар — рядом нет постройки для сноса")
 	else:
-		print("CLAUDE: топор бьёт по воздуху")
+		var nearest := _nearest_building()
+		if nearest != null:
+			_repair_building(nearest)
+		else:
+			print("CLAUDE: топор бьёт по воздуху")
 
 
 ## Интервал между ударами топора (Этап 4.27). Инструменты ускоряют атаку:
@@ -637,6 +675,56 @@ func repair_target() -> void:
 		print("CLAUDE: нечего ремонтировать")
 		return
 	_repair_building(nearest)
+
+
+## Тяжёлый удар (ПКМ) по постройке — СНОС: снимаем DEMOLISH_HP_FRACTION (15%) её
+## МАКС. HP за удар (правка автора). Ломать можно всё, кроме периметра убежища и
+## мастерской. Урон идёт через take_damage постройки → при обнулении HP она гибнет;
+## если прокачана «Переработка», build_system вернёт часть ресурсов (сигнал died).
+func _try_demolish(node: Node) -> void:
+	if not _is_demolishable(node):
+		print("CLAUDE: это снести нельзя (убежище/мастерская)")
+		return
+	var hc := _find_building_health(node)
+	if hc == null:
+		print("CLAUDE: у постройки нет HP — снос невозможен")
+		return
+	var dmg: float = hc.max_health * DEMOLISH_HP_FRACTION
+	node.take_damage(dmg)
+	print("Снос постройки: -", dmg, " HP (15% макс.), осталось ",
+			hc.current_health, " / ", hc.max_health)
+
+
+## Можно ли снести постройку тяжёлым ударом: это постройка (группа "building"),
+## но НЕ сегмент периметра убежища и НЕ мастерская, и по ней можно нанести урон.
+func _is_demolishable(node: Node) -> bool:
+	return node.is_in_group("building") \
+			and not node.is_in_group("shelter_segment") \
+			and not node.is_in_group("workshop") \
+			and node.has_method("take_damage")
+
+
+## Найти дочерний HealthComponent постройки (для расчёта 15% макс. HP при сносе).
+func _find_building_health(node: Node) -> HealthComponent:
+	for c in node.get_children():
+		if c is HealthComponent:
+			return c
+	return null
+
+
+## Ближайшая СНОСИМАЯ постройка в радиусе repair_range — когда луч прошёл мимо
+## низкой стены (как и при ремонте). Исключает убежище и мастерскую.
+func _nearest_demolishable() -> Node3D:
+	var nearest: Node3D = null
+	var nearest_dist := repair_range
+	for node in get_tree().get_nodes_in_group("building"):
+		if not (node is Node3D) or not _is_demolishable(node):
+			continue
+		var dist := (node as Node3D).global_position.distance_to(global_position)
+		if dist <= nearest_dist:
+			nearest = node
+			nearest_dist = dist
+	return nearest
 
 
 ## Урон по игроку (например, от зомби). «Улучшение бронежилета» (Этап 4.41)

@@ -1385,6 +1385,47 @@ func _run_capture(args: PackedStringArray) -> void:
 					InventorySystem.get_resource("steel") - s0, "s (ожид. +1w +2s)")
 		_dump_state("ПОСЛЕ оживления навыков (4.41)")
 
+	# 6.9996) Тяжёлый удар ПКМ (правка автора): снос построек на 15% макс. HP,
+	# исключения (убежище/мастерская) и темп ×2.2.
+	if is_instance_valid(player):
+		print("CLAUDE: тяжёлый удар (ПКМ) — снос построек и исключения")
+		var bs2: Node = player.build_system   # типизируем (грабля := у нетипизированного player)
+		var wall_scene: PackedScene = bs2.wall_scene if bs2 else null
+		if wall_scene:
+			var demo_wall: Node = wall_scene.instantiate()
+			get_tree().current_scene.add_child(demo_wall)
+			(demo_wall as Node3D).global_position = (player as Node3D).global_position + Vector3(2, 0, 0)
+			var whc: HealthComponent = null
+			for c in demo_wall.get_children():
+				if c is HealthComponent:
+					whc = c
+			if whc:
+				var before: float = whc.current_health
+				var maxhp: float = whc.max_health
+				player._try_demolish(demo_wall)
+				print("  снос стены: HP ", before, " → ", whc.current_health,
+						" (ожид. −", snappedf(maxhp * 0.15, 0.1), " = 15% от ", maxhp, ")")
+			print("  стена сносима = ", player._is_demolishable(demo_wall), " (ожид. true)")
+			if is_instance_valid(demo_wall):
+				demo_wall.queue_free()
+		var demo_seg := get_tree().get_first_node_in_group("shelter_segment")
+		if is_instance_valid(demo_seg):
+			print("  сегмент убежища сносим = ", player._is_demolishable(demo_seg), " (ожид. false)")
+		var wsp := get_tree().get_first_node_in_group("workshop")
+		if is_instance_valid(wsp):
+			print("  мастерская сносима = ", player._is_demolishable(wsp), " (ожид. false)")
+		# Темп: тяжёлый удар в 2.2× медленнее обычного (кулдаун ставится до прицела).
+		player._swing_timer = 0.0
+		player.swing_axe(false)
+		var light_cd: float = player._swing_timer
+		player._swing_timer = 0.0
+		player.swing_axe(true)
+		var heavy_cd: float = player._swing_timer
+		player._swing_timer = 0.0
+		print("  темп: обычный ", snappedf(light_cd, 0.01), " с, тяжёлый ",
+				snappedf(heavy_cd, 0.01), " с, отношение x",
+				snappedf(heavy_cd / maxf(light_cd, 0.001), 0.01), " (ожид. x2.2)")
+
 	# 6.999) Финал: показываем дерево навыков (ёлочка) на снимке — проходим полную
 	# цепочку Инженера + немного в других ветках, чтобы видеть открытые/закрытые/
 	# максимальные узлы, замки и пути.
