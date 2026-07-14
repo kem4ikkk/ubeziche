@@ -14,7 +14,7 @@ var _build_system: Node
 const ICON := {
 	"Стена": "bricks", "Мастерская": "toolcross", "Генератор": "generator",
 	"Турель": "turret", "Лазарет": "medkit", "Костёр": "campfire",
-	"Мортира": "mortar", "Гатлинг": "mg",
+	"Мортира": "mortar", "Гатлинг": "mg", "Склад": "warehouse",
 }
 
 
@@ -171,7 +171,7 @@ func _on_exit_build() -> void:
 ## Хватает ли ресурсов на постройку (Этап 4.31): чтобы гасить кнопку в меню.
 func _can_afford(cost: Dictionary) -> bool:
 	for r in cost:
-		if InventorySystem.get_resource(r) < int(cost[r]):
+		if InventorySystem.get_total_resource(r) < int(cost[r]):
 			return false
 	return true
 
@@ -187,7 +187,7 @@ func _cost_text(cost: Dictionary) -> String:
 func _deficit_text(cost: Dictionary) -> String:
 	var parts: Array[String] = []
 	for r in cost:
-		var miss: int = int(cost[r]) - InventorySystem.get_resource(r)
+		var miss: int = int(cost[r]) - InventorySystem.get_total_resource(r)
 		if miss > 0:
 			parts.append("%d %s" % [miss, _res_name(r)])
 	return "не хватает: " + ", ".join(parts)

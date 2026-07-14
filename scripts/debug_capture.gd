@@ -487,6 +487,10 @@ func _run_capture(args: PackedStringArray) -> void:
 
 		if bs_t.build_mode:
 			bs_t.toggle()
+		# Чистим склад, чтобы стоки из _top_resources не влияли на следующие секции.
+		InventorySystem.storage_capacity = 0
+		InventorySystem.stored = {"wood": 0, "steel": 0}
+		InventorySystem.storage_changed.emit(InventorySystem.stored, 0)
 		_dump_state("ПОСЛЕ тиров")
 
 	# 6.95) Мортирная турель (Этап 4.8.3): строим мортиру, спавним кучку
@@ -695,6 +699,11 @@ func _run_capture(args: PackedStringArray) -> void:
 		InventorySystem.has_improved_axe = false
 		InventorySystem.add_resource("wood", 40)
 		InventorySystem.add_resource("steel", 40)
+		# Три инструмента стоят суммарно >20 (кэп рюкзака) — недостачу берём со
+		# склада (Этап 4.43: трата из рюкзак+склад). После крафта склад чистим.
+		InventorySystem.storage_capacity = maxi(InventorySystem.storage_capacity, 100)
+		InventorySystem.stored["wood"] = 100
+		InventorySystem.stored["steel"] = 100
 		(player as Node3D).global_position = Vector3(-3, 1, 3)
 		await get_tree().create_timer(0.2).timeout
 
@@ -711,6 +720,10 @@ func _run_capture(args: PackedStringArray) -> void:
 		var hm: bool = workshop_h.craft_hammer()
 		print("  крафт нож/улучш.топор/молот: ", k, "/", ia, "/", hm, " | флаги: ",
 				InventorySystem.has_knife, "/", InventorySystem.has_improved_axe, "/", InventorySystem.has_hammer)
+		# Чистим склад, чтобы стоки не влияли на следующие секции.
+		InventorySystem.storage_capacity = 0
+		InventorySystem.stored = {"wood": 0, "steel": 0}
+		InventorySystem.storage_changed.emit(InventorySystem.stored, 0)
 		print("  интервал удара: базовый ", player.axe_swing_interval,
 				" → текущий ", player._axe_swing_interval(), " (улучш.топор = x0.5)")
 
@@ -1426,6 +1439,50 @@ func _run_capture(args: PackedStringArray) -> void:
 				snappedf(heavy_cd, 0.01), " с, отношение x",
 				snappedf(heavy_cd / maxf(light_cd, 0.001), 0.01), " (ожид. x2.2)")
 
+	# 6.99955) Склад/рюкзак (Этап 4.43): лимит переноски 20 + 3/ур; домашний склад
+	# (deposit/withdraw + ёмкость); трата из рюкзак+склад; штраф смерти −50% рюкзака.
+	print("CLAUDE: склад/рюкзак (4.43) — переноска, deposit/withdraw, трата, смерть")
+	InventorySystem.reset_run_progression()
+	InventorySystem.storage_capacity = 0
+	InventorySystem.stored = {"wood": 0, "steel": 0}
+	InventorySystem.inventory["wood"] = 0
+	InventorySystem.inventory["steel"] = 0
+	var cap0: int = InventorySystem.get_resource_cap()
+	InventorySystem.skill_levels["gather_basic"] = 2
+	var cap2: int = InventorySystem.get_resource_cap()
+	print("  кэп рюкзака: без навыка ", cap0, " (ожид. 20), навык 2 → ", cap2, " (ожид. 26)")
+	InventorySystem.add_resource("wood", 100)   # сбор режется по кэпу
+	print("  сбор 100 дерева → рюкзак ", InventorySystem.get_resource("wood"),
+			" (ожид. ", cap2, ", излишек потерян)")
+	InventorySystem.add_storage_capacity(100)   # построили склад: +100 ёмкости
+	InventorySystem.deposit_all()
+	print("  после сдачи всего: рюкзак ", InventorySystem.get_resource("wood"),
+			", склад ", InventorySystem.get_stored("wood"), " (ожид. 0 и ", cap2, ")")
+	InventorySystem.withdraw("wood", 5)
+	print("  забрали 5: рюкзак ", InventorySystem.get_resource("wood"),
+			", склад ", InventorySystem.get_stored("wood"))
+	print("  всего доступно дерева = ", InventorySystem.get_total_resource("wood"),
+			" (ожид. ", cap2, ")")
+	var bag_b: int = InventorySystem.get_resource("wood")
+	var st_b: int = InventorySystem.get_stored("wood")
+	var spent_ok: bool = InventorySystem.use_resource("wood", 10)  # 5 из рюкзака + 5 со склада
+	print("  трата 10 (ok=", spent_ok, "): рюкзак ", bag_b, "→", InventorySystem.get_resource("wood"),
+			", склад ", st_b, "→", InventorySystem.get_stored("wood"), " (ожид. 0 и −5)")
+	InventorySystem.inventory["wood"] = 10
+	InventorySystem.inventory["steel"] = 7
+	var lost: Dictionary = InventorySystem.drop_carried_on_death()
+	print("  смерть −50% рюкзака: дерево ", InventorySystem.get_resource("wood"),
+			" (ожид. 5), сталь ", InventorySystem.get_resource("steel"), " (ожид. 4); склад цел = ",
+			InventorySystem.get_stored("wood"))
+	InventorySystem.remove_storage_capacity(100)   # снос склада: запас сверх ёмкости срезается
+	print("  снос склада: ёмкость ", InventorySystem.get_storage_capacity(),
+			", склад дерева ", InventorySystem.get_stored("wood"), " (ожид. 0 и 0)")
+	InventorySystem.reset_run_progression()
+	InventorySystem.storage_capacity = 0
+	InventorySystem.stored = {"wood": 0, "steel": 0}
+	InventorySystem.inventory["wood"] = 0
+	InventorySystem.inventory["steel"] = 0
+
 	# 6.999) Финал: показываем дерево навыков (ёлочка) на снимке — проходим полную
 	# цепочку Инженера + немного в других ветках, чтобы видеть открытые/закрытые/
 	# максимальные узлы, замки и пути.
@@ -1474,9 +1531,15 @@ func _run_capture(args: PackedStringArray) -> void:
 ## Заполняет дерево/сталь до кэпа RESOURCE_CAP напрямую (минуя cap в add_resource)
 ## — имитация «собрал максимум» перед апгрейдом тира в тестах (Этап 4.25).
 func _top_resources() -> void:
+	# Рюкзак — до лимита переноски; склад — с запасом (Этап 4.43): апгрейд тира
+	# (до 40 дерева/35 стали) тратится из общего запаса рюкзак+склад.
 	InventorySystem.inventory["wood"] = InventorySystem.RESOURCE_CAP
 	InventorySystem.inventory["steel"] = InventorySystem.RESOURCE_CAP
+	InventorySystem.storage_capacity = maxi(InventorySystem.storage_capacity, 100)
+	InventorySystem.stored["wood"] = 100
+	InventorySystem.stored["steel"] = 100
 	InventorySystem.inventory_changed.emit(InventorySystem.inventory)
+	InventorySystem.storage_changed.emit(InventorySystem.stored, InventorySystem.storage_capacity)
 
 
 ## Гарантирует питание турелей в тестах (Этап 4.25): модель мощности — питание

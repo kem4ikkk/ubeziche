@@ -36,6 +36,7 @@ func _ready() -> void:
 		{"name": "Генератор", "scene": generator_scene, "cost": {"steel": 10, "wood": 5}, "min_tier": 1},
 		{"name": "Турель", "scene": turret_scene, "cost": {"steel": 3, "wood": 2}, "min_tier": 1},
 		{"name": "Лазарет", "scene": infirmary_scene, "cost": {"wood": 3, "steel": 3}, "min_tier": 1},
+		{"name": "Склад", "scene": storage_scene, "cost": {"wood": 8, "steel": 4}, "min_tier": 1},
 		{"name": "Костёр", "scene": campfire_scene, "cost": {"wood": 5}, "min_tier": 1},
 		{"name": "Мортира", "scene": mortar_scene, "cost": {"steel": 8, "wood": 4}, "min_tier": 2},
 		{"name": "Гатлинг", "scene": gatling_scene, "cost": {"steel": 12, "wood": 6}, "min_tier": 3},
@@ -117,7 +118,7 @@ func try_place() -> bool:
 
 	var cost: Dictionary = buildable.cost
 	for resource_type in cost:
-		if InventorySystem.get_resource(resource_type) < cost[resource_type]:
+		if InventorySystem.get_total_resource(resource_type) < cost[resource_type]:
 			print("CLAUDE: не хватает ресурсов для постройки (", buildable.name, ")")
 			return false
 

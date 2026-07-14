@@ -74,8 +74,8 @@ func upgrade_shelter_tier() -> bool:
 		return false
 	var next_tier: int = current + 1
 	var cost: Dictionary = TIER_UPGRADE_COST[next_tier]
-	if InventorySystem.get_resource("wood") < cost.wood \
-			or InventorySystem.get_resource("steel") < cost.steel:
+	if InventorySystem.get_total_resource("wood") < cost.wood \
+			or InventorySystem.get_total_resource("steel") < cost.steel:
 		print("Мастерская: не хватает ресурсов для апгрейда до Тир ", next_tier,
 				" (нужно ", cost.wood, " дерева, ", cost.steel, " стали)")
 		return false
@@ -99,8 +99,8 @@ func craft_c4() -> bool:
 	if not InventorySystem.has_c4:
 		print("Мастерская: C4 недоступен (нужен класс Инженер и открытая способность C4)")
 		return false
-	if InventorySystem.get_resource("wood") < C4_COST.wood \
-			or InventorySystem.get_resource("steel") < C4_COST.steel:
+	if InventorySystem.get_total_resource("wood") < C4_COST.wood \
+			or InventorySystem.get_total_resource("steel") < C4_COST.steel:
 		print("Мастерская: не хватает ресурсов для C4 (нужно ",
 				C4_COST.wood, " дерева, ", C4_COST.steel, " стали)")
 		return false
@@ -147,8 +147,8 @@ func _craft_tool(tool: String) -> bool:
 		print("Мастерская: «", spec.title, "» требует мастерство ветки «", spec.branch, "»")
 		return false
 	var cost: Dictionary = spec.cost
-	if InventorySystem.get_resource("wood") < cost.wood \
-			or InventorySystem.get_resource("steel") < cost.steel:
+	if InventorySystem.get_total_resource("wood") < cost.wood \
+			or InventorySystem.get_total_resource("steel") < cost.steel:
 		print("Мастерская: не хватает ресурсов для «", spec.title, "» (нужно ",
 				cost.wood, " дерева, ", cost.steel, " стали)")
 		return false

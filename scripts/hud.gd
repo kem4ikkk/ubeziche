@@ -59,6 +59,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
 	_on_inventory_changed(InventorySystem.inventory)
+	InventorySystem.storage_changed.connect(_on_storage_changed)
 	InventorySystem.money_changed.connect(_on_money_changed)
 	_on_money_changed(InventorySystem.money)
 
@@ -618,13 +619,30 @@ func _on_game_over(victory: bool) -> void:
 	result_screen.visible = true
 
 
-func _on_inventory_changed(inventory: Dictionary) -> void:
-	# Показываем только собираемые ресурсы (дерево/сталь) — строками с иконками.
-	# «Стена» — это постройка (ставится в B-меню), в HUD не выводится.
+func _on_inventory_changed(_inventory: Dictionary) -> void:
+	_refresh_resources()
+
+
+func _on_storage_changed(_stored: Dictionary, _capacity: int) -> void:
+	_refresh_resources()
+
+
+## Строки ресурсов: рюкзак c лимитом переноски + (если построен склад) домашний
+## запас склада. «Стена» — постройка (ставится в B-меню), в HUD не выводится.
+func _refresh_resources() -> void:
 	if _wood_val == null:
 		return
-	_wood_val.text = "Дерево: %d" % int(inventory.get("wood", 0))
-	_steel_val.text = "Сталь: %d" % int(inventory.get("steel", 0))
+	var cap: int = InventorySystem.get_resource_cap()
+	var scap: int = InventorySystem.get_storage_capacity()
+	_wood_val.text = _res_line("Дерево", "wood", cap, scap)
+	_steel_val.text = _res_line("Сталь", "steel", cap, scap)
+
+
+func _res_line(title: String, res: String, cap: int, scap: int) -> String:
+	var bag: int = InventorySystem.get_resource(res)
+	if scap > 0:
+		return "%s: %d/%d · склад %d/%d" % [title, bag, cap, InventorySystem.get_stored(res), scap]
+	return "%s: %d/%d" % [title, bag, cap]
 
 
 func _on_money_changed(amount: int) -> void:

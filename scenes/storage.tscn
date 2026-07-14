@@ -34,3 +34,11 @@ billboard = 1
 visibility_range_end = 12.0
 font_size = 28
 text = "Склад 50 / 50"
+
+[node name="Prompt" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+billboard = 1
+visibility_range_end = 14.0
+font_size = 22
+text = "Склад
+(подойдите ближе)"

@@ -267,7 +267,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Открыто ли какое-либо UI-меню (навыки/постройки/мастерская). Пока меню открыто,
 ## ЛКМ не действует в мире, а Esc закрывает меню (паузы в игре нет).
 func _any_menu_open() -> bool:
-	for grp in ["skill_menu", "build_menu", "workshop_menu"]:
+	for grp in ["skill_menu", "build_menu", "workshop_menu", "warehouse_menu"]:
 		var m := get_tree().get_first_node_in_group(grp)
 		if is_instance_valid(m) and m.visible:
 			return true
@@ -276,7 +276,7 @@ func _any_menu_open() -> bool:
 
 ## Закрыть все открытые меню (Esc).
 func _close_all_menus() -> void:
-	for grp in ["skill_menu", "build_menu", "workshop_menu"]:
+	for grp in ["skill_menu", "build_menu", "workshop_menu", "warehouse_menu"]:
 		var m := get_tree().get_first_node_in_group(grp)
 		if is_instance_valid(m) and m.has_method("close"):
 			m.close()
@@ -969,6 +969,11 @@ func _on_died() -> void:
 		return
 	_dead = true
 	_deaths += 1
+	# Штраф смерти (Этап 4.43): теряем половину дерева/стали ИЗ РЮКЗАКА (склад цел).
+	var lost: Dictionary = InventorySystem.drop_carried_on_death()
+	if int(lost.get("wood", 0)) > 0 or int(lost.get("steel", 0)) > 0:
+		print("Потеряно при смерти: -", int(lost.get("wood", 0)), " дерева, -",
+				int(lost.get("steel", 0)), " стали (половина рюкзака)")
 	_respawn_timer = clampf(19.0 + float(_deaths), 20.0, 30.0)   # 20..30 c, +1 за смерть
 	_respawn_total = _respawn_timer
 	collision_layer = 0                                          # наблюдатель: noclip

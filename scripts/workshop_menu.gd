@@ -101,7 +101,7 @@ func _rebuild() -> void:
 
 func _can_afford(cost: Dictionary) -> bool:
 	for r in cost:
-		if InventorySystem.get_resource(r) < int(cost[r]):
+		if InventorySystem.get_total_resource(r) < int(cost[r]):
 			return false
 	return true
 
@@ -110,7 +110,7 @@ func _can_afford(cost: Dictionary) -> bool:
 func _add_deficit(cost: Dictionary) -> void:
 	var parts: Array[String] = []
 	for r in cost:
-		var miss: int = int(cost[r]) - InventorySystem.get_resource(r)
+		var miss: int = int(cost[r]) - InventorySystem.get_total_resource(r)
 		if miss > 0:
 			parts.append("%d %s" % [miss, _res_name(r)])
 	if parts.is_empty():

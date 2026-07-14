@@ -22,7 +22,7 @@ func craft(recipe_name: String) -> bool:
 	# Проверяем есть ли ресурсы
 	for resource_type in recipe["inputs"]:
 		var amount = recipe["inputs"][resource_type]
-		if InventorySystem.get_resource(resource_type) < amount:
+		if InventorySystem.get_total_resource(resource_type) < amount:
 			return false
 
 	# Используем входные ресурсы

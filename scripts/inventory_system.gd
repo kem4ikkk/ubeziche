@@ -6,9 +6,13 @@ extends Node
 signal inventory_changed(inventory: Dictionary)
 signal money_changed(amount: int)  ## деньги — вторая валюта (Этап 4.7.2)
 signal tier_changed(new_tier: int)  ## тир убежища (Этап 4.15)
+## Склад изменился: домашний запас/ёмкость (Этап 4.43). HUD и меню слушают.
+signal storage_changed(stored: Dictionary, capacity: int)
 
-## Лимит для собираемых стройматериалов оригинала (дерево/сталь) — Этап 4.16.
-const RESOURCE_CAP := 40
+## Лимит ПЕРЕНОСКИ дерева/стали в РЮКЗАКЕ (Этап 4.43): база 20, навык «Мастерство
+## сбора» даёт +3 за уровень. Склад НЕ повышает переноску — это отдельный запас.
+const RESOURCE_CAP := 20
+const CARRY_PER_GATHER_SKILL := 3
 const CAPPED_RESOURCES := ["wood", "steel"]
 
 var inventory: Dictionary = {
@@ -18,6 +22,13 @@ var inventory: Dictionary = {
 	# мгновенный бюджет мощности (сумма генераторов vs сумма турелей), считается
 	# в turret.gd/hud.gd по группам, а не хранится здесь. Боезапас турелей убран.
 }
+
+# Склад (Warehouse, Этап 4.43): ОТДЕЛЬНЫЙ домашний запас дерева/стали. Постройка
+# «Склад» повышает ёмкость склада (storage_capacity), но НЕ размер рюкзака. Дома
+# у мастерской ресурсы можно тратить и из рюкзака, и со склада (см. use_resource);
+# в поле собираешь в рюкзак (лимит переноски), лишнее сдаёшь на склад.
+var stored: Dictionary = {"wood": 0, "steel": 0}
+var storage_capacity: int = 0
 
 # Деньги (Этап 4.7.2): отдельная валюта, не входит в inventory.
 # Ресурсы (дерево/камень) идут на крафт и постройку, деньги — на покупки
@@ -159,7 +170,8 @@ func _on_night_survived() -> void:
 	add_skill_point(1)
 
 
-## Добавить ресурс в инвентарь.
+## Добавить ресурс в РЮКЗАК (сбор/крафт). Дерево/сталь режутся по лимиту переноски;
+## излишек теряется — чтобы накопить больше, сдай на склад (deposit).
 func add_resource(resource_type: String, amount: int) -> void:
 	if resource_type not in inventory:
 		inventory[resource_type] = 0
@@ -169,9 +181,99 @@ func add_resource(resource_type: String, amount: int) -> void:
 	inventory_changed.emit(inventory)
 
 
-## Лимит дерева/стали: базовый + «Мастерство сбора» (+20 за уровень — переносим больше).
+## Лимит переноски дерева/стали в рюкзаке: база 20 + «Мастерство сбора» (+3/ур).
+## Склад на переноску НЕ влияет (у него отдельная ёмкость, см. get_storage_capacity).
 func get_resource_cap() -> int:
-	return RESOURCE_CAP + 20 * int(skill_levels.get("gather_basic", 0))
+	return RESOURCE_CAP + CARRY_PER_GATHER_SKILL * int(skill_levels.get("gather_basic", 0))
+
+
+## --- Склад (Warehouse, Этап 4.43) ---
+## Каждая постройка «Склад» повышает ёмкость домашнего запаса (общая на дерево и
+## на сталь — по storage_capacity каждого). Постройка регистрирует/снимает свой
+## вклад при установке/сносе (storage.gd). При уменьшении ёмкости лишний запас
+## сверх новой ёмкости срезается (склад разрушен — ресурсы потеряны).
+
+## Текущая ёмкость склада (на каждый ресурс: дерево и сталь по отдельности).
+func get_storage_capacity() -> int:
+	return storage_capacity
+
+
+## Сколько ресурса лежит на складе.
+func get_stored(resource_type: String) -> int:
+	return int(stored.get(resource_type, 0))
+
+
+## Увеличить ёмкость склада (постройка «Склад» при установке).
+func add_storage_capacity(amount: int) -> void:
+	storage_capacity += maxi(0, amount)
+	storage_changed.emit(stored, storage_capacity)
+
+
+## Снять ёмкость при разрушении/сносе склада; лишний запас сверх новой ёмкости теряется.
+func remove_storage_capacity(amount: int) -> void:
+	storage_capacity = maxi(0, storage_capacity - maxi(0, amount))
+	for r in CAPPED_RESOURCES:
+		if int(stored.get(r, 0)) > storage_capacity:
+			stored[r] = storage_capacity
+	storage_changed.emit(stored, storage_capacity)
+
+
+## Сдать ресурс из рюкзака на склад (сколько влезло). Возвращает фактически сданное.
+func deposit(resource_type: String, amount: int) -> int:
+	if resource_type not in CAPPED_RESOURCES:
+		return 0
+	var have: int = int(inventory.get(resource_type, 0))
+	var free: int = storage_capacity - int(stored.get(resource_type, 0))
+	var moved: int = clampi(amount, 0, mini(have, free))
+	if moved <= 0:
+		return 0
+	inventory[resource_type] = have - moved
+	stored[resource_type] = int(stored.get(resource_type, 0)) + moved
+	inventory_changed.emit(inventory)
+	storage_changed.emit(stored, storage_capacity)
+	return moved
+
+
+## Забрать ресурс со склада в рюкзак (не больше свободного места рюкзака). Возвращает взятое.
+func withdraw(resource_type: String, amount: int) -> int:
+	if resource_type not in CAPPED_RESOURCES:
+		return 0
+	var in_store: int = int(stored.get(resource_type, 0))
+	var free: int = get_resource_cap() - int(inventory.get(resource_type, 0))
+	var moved: int = clampi(amount, 0, mini(in_store, free))
+	if moved <= 0:
+		return 0
+	stored[resource_type] = in_store - moved
+	inventory[resource_type] = int(inventory.get(resource_type, 0)) + moved
+	inventory_changed.emit(inventory)
+	storage_changed.emit(stored, storage_capacity)
+	return moved
+
+
+## Сдать всё дерево/сталь из рюкзака на склад (сколько влезет).
+func deposit_all() -> void:
+	for r in CAPPED_RESOURCES:
+		deposit(r, int(inventory.get(r, 0)))
+
+
+## Забрать со склада всё дерево/сталь (сколько влезет в рюкзак).
+func withdraw_all() -> void:
+	for r in CAPPED_RESOURCES:
+		withdraw(r, int(stored.get(r, 0)))
+
+
+## Смерть игрока (Этап 4.43): теряем половину ПЕРЕНОСИМЫХ (в рюкзаке) дерева/стали.
+## Склад не трогаем. Возвращает словарь потерь для лога.
+func drop_carried_on_death() -> Dictionary:
+	var lost := {}
+	for r in CAPPED_RESOURCES:
+		var have: int = int(inventory.get(r, 0))
+		var drop: int = have / 2   # целочисленно: половина вниз
+		if drop > 0:
+			inventory[r] = have - drop
+		lost[r] = drop
+	inventory_changed.emit(inventory)
+	return lost
 
 
 ## Сколько ресурса даёт один удар топором по узлу: база 1 + «Мастерство сбора»
@@ -225,18 +327,30 @@ func power_cost_mult() -> float:
 	return 0.8 if get_skill_level("electrician") > 0 else 1.0
 
 
-## Использовать ресурсы для крафта (возвращает true если достаточно).
+## Потратить ресурс на крафт/постройку (Этап 4.43): списываем СНАЧАЛА из рюкзака,
+## потом со склада (дома у мастерской тратишь из общего запаса). Возвращает true,
+## если суммарно (рюкзак + склад) хватило.
 func use_resource(resource_type: String, amount: int) -> bool:
-	if inventory.get(resource_type, 0) >= amount:
-		inventory[resource_type] -= amount
-		inventory_changed.emit(inventory)
-		return true
-	return false
+	if get_total_resource(resource_type) < amount:
+		return false
+	var from_bag: int = mini(int(inventory.get(resource_type, 0)), amount)
+	inventory[resource_type] = int(inventory.get(resource_type, 0)) - from_bag
+	var rest: int = amount - from_bag
+	if rest > 0 and resource_type in stored:
+		stored[resource_type] = int(stored.get(resource_type, 0)) - rest
+		storage_changed.emit(stored, storage_capacity)
+	inventory_changed.emit(inventory)
+	return true
 
 
-## Получить количество ресурса.
+## Количество ресурса В РЮКЗАКЕ (для HUD/переноски).
 func get_resource(resource_type: String) -> int:
 	return inventory.get(resource_type, 0)
+
+
+## Всего доступно ресурса = рюкзак + склад (для проверок «хватает ли» на крафт/постройку).
+func get_total_resource(resource_type: String) -> int:
+	return int(inventory.get(resource_type, 0)) + int(stored.get(resource_type, 0))
 
 
 ## Начислить деньги (Этап 4.7.2): например, за убийство зомби.
