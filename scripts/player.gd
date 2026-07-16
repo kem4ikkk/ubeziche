@@ -29,18 +29,26 @@ signal weapon_changed(weapon_name: String)
 # пуль с разбросом, больше урона вблизи, но короче дальность и меньше обойма.
 # Класс оружия "tier" (Этап 4.41): к нему привязаны навыки «Мастер оружия»
 # (basic — пистолеты, mid — дробовик/снайперка, adv — автомат).
+# Каталог стволов (Этап 4.44, слоты как в CS): slot = pistol|primary;
+# skill — какой навык ≥1 нужен для покупки ("" = стартовый пистолет, всегда свой).
 var weapons: Array[Dictionary] = [
-	{"name": "Пистолет",          "damage": 10.0, "magazine_size": 8,  "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0,  "price": 0,   "tier": "basic"},
-	{"name": "Двойные пистолеты", "damage": 9.0,  "magazine_size": 16, "reload_time": 2.0, "range": 90.0,  "pellets": 1, "spread": 0.01, "price": 40,  "tier": "basic"},
-	{"name": "Дробовик",          "damage": 6.0,  "magazine_size": 4,  "reload_time": 2.2, "range": 20.0,  "pellets": 5, "spread": 0.05, "price": 50,  "tier": "mid"},
-	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90,  "auto": true, "tier": "adv"},
-	{"name": "Снайперка",         "damage": 40.0, "magazine_size": 5,  "reload_time": 3.0, "range": 300.0, "pellets": 1, "spread": 0.0,  "price": 120, "tier": "mid"},
+	{"name": "Пистолет",          "damage": 10.0, "magazine_size": 8,  "reload_time": 1.5, "range": 100.0, "pellets": 1, "spread": 0.0,  "price": 0,   "tier": "basic", "slot": "pistol",  "skill": ""},
+	{"name": "Двойные пистолеты", "damage": 9.0,  "magazine_size": 16, "reload_time": 2.0, "range": 90.0,  "pellets": 1, "spread": 0.01, "price": 40,  "tier": "basic", "slot": "pistol",  "skill": "weapon_basic"},
+	{"name": "Дробовик",          "damage": 6.0,  "magazine_size": 4,  "reload_time": 2.2, "range": 20.0,  "pellets": 5, "spread": 0.05, "price": 50,  "tier": "mid",   "slot": "primary", "skill": "weapon_mid"},
+	{"name": "Автомат",           "damage": 8.0,  "magazine_size": 30, "reload_time": 2.5, "range": 80.0,  "pellets": 1, "spread": 0.02, "price": 90,  "auto": true, "tier": "adv", "slot": "primary", "skill": "weapon_adv"},
+	{"name": "Снайперка",         "damage": 40.0, "magazine_size": 5,  "reload_time": 3.0, "range": 300.0, "pellets": 1, "spread": 0.0,  "price": 120, "tier": "mid",   "slot": "primary", "skill": "weapon_mid"},
 ]
-var current_weapon_index: int = 0
+## Слоты CS (Этап 4.44): 1 = основное, 2 = пистолет, 3 = ближний бой.
+const SLOT_PRIMARY := 1
+const SLOT_PISTOL := 2
+const SLOT_MELEE := 3
+var current_weapon_index: int = 0          # индекс ствола в каталоге (если в руках ствол)
 var _ammo_in_weapon: Array[int] = []
-# Какое оружие уже куплено (Этап 4.7.2: деньги тратятся на оружие).
-# В начале игры у игрока только пистолет (индекс 0), остальное — за деньги.
-var _owned: Array[bool] = []
+# Содержимое слотов: индекс ствола в weapons или -1 (пусто). Ближний бой — id.
+var _slot_primary: int = -1
+var _slot_pistol: int = 0                  # стартовый базовый пистолет
+var _melee_id: String = "axe"              # axe | knife | crowbar | hammer
+var _active_slot: int = SLOT_MELEE         # на старте в руках топор
 
 # Текущее оружие (заполняется из weapons при инициализации/переключении)
 @export var damage: float = 10.0          # урон за выстрел (за пулю)
@@ -174,16 +182,17 @@ func _ready() -> void:
 	# навыков пересобираем параметры текущего оружия (Этап 4.41).
 	InventorySystem.skills_changed.connect(_reapply_current_weapon)
 
-	# Инициализация оружия (Этап 4.6.2): у каждого оружия своя обойма.
-	# Стартует только пистолет (индекс 0), остальное покупается за деньги.
+	# Инициализация оружия (Этап 4.44): обойма на каждый ствол каталога;
+	# слоты CS — пистолет + топор, основное пусто. В руках — топор.
 	for i in weapons.size():
 		_ammo_in_weapon.append(int(weapons[i].magazine_size))
-		_owned.append(i == 0)
-	_apply_weapon(current_weapon_index)
+	_apply_weapon(_slot_pistol)
+	axe_equipped = true
+	_active_slot = SLOT_MELEE
 
 	ammo_changed.emit(current_ammo, magazine_size)
 	# На старте в руках топор — сообщаем HUD после готовности всей сцены.
-	weapon_changed.emit.call_deferred("Топор")
+	weapon_changed.emit.call_deferred(_melee_display_name())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -238,17 +247,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		reload()
 
-	# 1-5 — переключить оружие (Этап 4.6.2; арсенал расширен).
-	if event is InputEventKey and event.pressed and event.keycode >= KEY_1 and event.keycode <= KEY_5:
-		switch_weapon(event.keycode - KEY_1)
-
-	# Q — взять топор (снимает ствол). Стволы берутся клавишами 1-5.
-	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
-		equip_axe()
+	# 1/2/3 — слоты CS (Этап 4.44): основное / пистолет / ближний бой.
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode >= KEY_1 and event.keycode <= KEY_3:
+		switch_slot(event.keycode - KEY_1 + 1)
 
 	# F — сигнатурная способность класса (Этап 4.12b): Авиаудар/Костёр/C4.
+	# Если открыто меню рынка — не жжём способность (F там открывает/закрывает меню).
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
-		use_class_ability()
+		if not _menu_visible("market_menu"):
+			use_class_ability()
 
 	# N — открыть/закрыть меню навыков (Этап 4.23).
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_N:
@@ -267,16 +275,20 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Открыто ли какое-либо UI-меню (навыки/постройки/мастерская). Пока меню открыто,
 ## ЛКМ не действует в мире, а Esc закрывает меню (паузы в игре нет).
 func _any_menu_open() -> bool:
-	for grp in ["skill_menu", "build_menu", "workshop_menu", "warehouse_menu"]:
-		var m := get_tree().get_first_node_in_group(grp)
-		if is_instance_valid(m) and m.visible:
+	for grp in ["skill_menu", "build_menu", "workshop_menu", "warehouse_menu", "market_menu"]:
+		if _menu_visible(grp):
 			return true
 	return false
 
 
+func _menu_visible(grp: String) -> bool:
+	var m := get_tree().get_first_node_in_group(grp)
+	return is_instance_valid(m) and m.visible
+
+
 ## Закрыть все открытые меню (Esc).
 func _close_all_menus() -> void:
-	for grp in ["skill_menu", "build_menu", "workshop_menu", "warehouse_menu"]:
+	for grp in ["skill_menu", "build_menu", "workshop_menu", "warehouse_menu", "market_menu"]:
 		var m := get_tree().get_first_node_in_group(grp)
 		if is_instance_valid(m) and m.has_method("close"):
 			m.close()
@@ -455,72 +467,166 @@ func reload() -> void:
 	print("CLAUDE: перезарядка завершена")
 
 
-## Переключение оружия (Этап 4.6.2): сохраняет патроны текущего оружия
-## и подгружает параметры/патроны нового. Во время перезарядки не даём
-## переключиться, чтобы не было путаницы со временем перезарядки.
-func switch_weapon(index: int) -> void:
-	if index < 0 or index >= weapons.size():
-		return
-	# Если в руках топор — даём взять даже текущий по индексу ствол.
-	if not axe_equipped and index == current_weapon_index:
+## Переключить слот CS (1/2/3). Пустой слот 1 — ничего. Этап 4.44.
+func switch_slot(slot: int) -> void:
+	if slot < SLOT_PRIMARY or slot > SLOT_MELEE:
 		return
 	if _reloading:
 		print("CLAUDE: нельзя переключить оружие во время перезарядки")
 		return
-	if not _owned[index]:
-		print("CLAUDE: оружие ", weapons[index].name, " ещё не куплено")
+	if slot == SLOT_PRIMARY and _slot_primary < 0:
+		print("CLAUDE: слот 1 пуст — основного оружия нет")
+		return
+	if slot == SLOT_PISTOL and _slot_pistol < 0:
+		print("CLAUDE: слот 2 пуст — пистолета нет")
+		return
+	# Уже держим этот слот с тем же содержимым — ничего не делаем.
+	# (При ЗАМЕНЕ ствола в текущем слоте индекс меняется → нужно применить новый.)
+	if slot == SLOT_MELEE and _active_slot == SLOT_MELEE and axe_equipped:
+		return
+	if slot != SLOT_MELEE and _active_slot == slot and not axe_equipped:
+		var cur: int = _slot_primary if slot == SLOT_PRIMARY else _slot_pistol
+		if cur == current_weapon_index:
+			return
+
+	# Сохраняем патроны текущего ствола перед сменой.
+	if not axe_equipped and current_weapon_index >= 0 and current_weapon_index < _ammo_in_weapon.size():
+		_ammo_in_weapon[current_weapon_index] = current_ammo
+
+	_active_slot = slot
+	if slot == SLOT_MELEE:
+		axe_equipped = true
+		weapon_changed.emit(_melee_display_name())
+		_update_viewmodel()
+		print("CLAUDE: в руках ", _melee_display_name())
 		return
 
-	axe_equipped = false   # взяли ствол — топор убран
-	_ammo_in_weapon[current_weapon_index] = current_ammo
-	_apply_weapon(index)
+	var idx: int = _slot_primary if slot == SLOT_PRIMARY else _slot_pistol
+	axe_equipped = false
+	_apply_weapon(idx)
 	ammo_changed.emit(current_ammo, magazine_size)
-	weapon_changed.emit(weapons[current_weapon_index].name)
-	print("CLAUDE: оружие переключено на ", weapons[current_weapon_index].name)
+	weapon_changed.emit(weapons[idx].name)
+	_update_viewmodel()
+	print("CLAUDE: оружие переключено на ", weapons[idx].name, " (слот ", slot, ")")
 
 
-## Взять топор (Этап 4.21): снимает ствол, ЛКМ начинает бить топором.
+## Совместимость: взять ствол по индексу каталога, если он сейчас в слоте.
+func switch_weapon(index: int) -> void:
+	if index < 0 or index >= weapons.size():
+		return
+	if not owns_weapon(index):
+		print("CLAUDE: оружие ", weapons[index].name, " не в слотах")
+		return
+	var slot_name: String = weapons[index].get("slot", "pistol")
+	switch_slot(SLOT_PRIMARY if slot_name == "primary" else SLOT_PISTOL)
+
+
+## Взять ближний бой (слот 3). Старое имя equip_axe — для тестов/совместимости.
 func equip_axe() -> void:
-	if axe_equipped:
-		return
-	if _reloading:
-		print("CLAUDE: нельзя сменить инструмент во время перезарядки")
-		return
-	axe_equipped = true
-	weapon_changed.emit("Топор")
-	print("CLAUDE: в руках топор")
+	switch_slot(SLOT_MELEE)
 
 
-## Куплено ли оружие с индексом index (Этап 4.7.2).
+## Есть ли ствол сейчас в одном из слотов (не «куплен навсегда» — CS-замена).
 func owns_weapon(index: int) -> bool:
-	return index >= 0 and index < _owned.size() and _owned[index]
+	return index == _slot_primary or index == _slot_pistol
 
 
-## Индекс следующего ещё не купленного оружия (по порядку/цене) или -1,
-## если всё куплено. Мастерская продаёт оружие именно в этом порядке.
+## Открыт ли ствол для покупки навыком «Мастер оружия» (Этап 4.44).
+func is_weapon_unlocked(index: int) -> bool:
+	if index < 0 or index >= weapons.size():
+		return false
+	var skill: String = weapons[index].get("skill", "")
+	if skill == "":
+		return true
+	return InventorySystem.get_skill_level(skill) >= 1
+
+
+## Чёрный рынок появляется только при weapon_basic ≥ 1 (Этап 4.44).
+func can_see_black_market() -> bool:
+	return InventorySystem.get_skill_level("weapon_basic") >= 1
+
+
+## Индекс следующего доступного к покупке ствола (не тот, что уже в слоте), или -1.
+## Для тестов/совместимости со старым API рынка.
 func next_unowned_weapon_index() -> int:
 	for i in weapons.size():
-		if not _owned[i]:
+		if weapons[i].get("price", 0) <= 0:
+			continue  # стартовый пистолет не «покупаем» в цикле
+		if owns_weapon(i):
+			continue
+		if is_weapon_unlocked(i):
 			return i
 	return -1
 
 
-## Покупка оружия за деньги (Этап 4.7.2): доступно в мастерской.
-## Возвращает true при успешной покупке; купленное сразу делаем активным.
+## Покупка ствола за деньги (чёрный рынок, Этап 4.44): кладёт в слот своего
+## типа с ЗАМЕНОЙ (как в CS). Уже тот же ствол в слоте — просто полная обойма.
 func buy_weapon(index: int) -> bool:
 	if index < 0 or index >= weapons.size():
 		return false
-	if _owned[index]:
-		print("CLAUDE: оружие ", weapons[index].name, " уже куплено")
+	if not is_weapon_unlocked(index):
+		print("CLAUDE: оружие ", weapons[index].name, " закрыто навыком")
 		return false
 	var price: int = get_weapon_price(index)
-	if not InventorySystem.spend_money(price):
+	# Повторная покупка того же — только дозарядка обоймы за полную цену.
+	if owns_weapon(index):
+		if price > 0 and not InventorySystem.spend_money(price):
+			print("CLAUDE: не хватает денег на обойму ", weapons[index].name)
+			return false
+		_ammo_in_weapon[index] = _mag_size_of(index)
+		if not axe_equipped and current_weapon_index == index:
+			current_ammo = _ammo_in_weapon[index]
+			ammo_changed.emit(current_ammo, magazine_size)
+		print("Дозарядка: ", weapons[index].name)
+		switch_weapon(index)
+		return true
+	if price > 0 and not InventorySystem.spend_money(price):
 		print("CLAUDE: не хватает денег на ", weapons[index].name, " (нужно ", price, "$)")
 		return false
-	_owned[index] = true
-	print("Куплено оружие: ", weapons[index].name, " за ", price, "$")
+	var slot_name: String = weapons[index].get("slot", "pistol")
+	if slot_name == "primary":
+		_slot_primary = index
+	else:
+		_slot_pistol = index
+	_ammo_in_weapon[index] = _mag_size_of(index)
+	print("Куплено оружие: ", weapons[index].name, " за ", price, "$ (слот ", slot_name, ")")
 	switch_weapon(index)
 	return true
+
+
+## Положить классовый инструмент в слот 3 (замена топора). Этап 4.44.
+func equip_melee_tool(tool_id: String) -> void:
+	match tool_id:
+		"knife":
+			_melee_id = "knife"
+		"improved_axe":
+			_melee_id = "crowbar"
+		"hammer":
+			_melee_id = "hammer"
+		_:
+			_melee_id = "axe"
+	# Флаги InventorySystem — эксклюзивно под активный инструмент (баффы урона/скорости).
+	InventorySystem.has_knife = _melee_id == "knife"
+	InventorySystem.has_improved_axe = _melee_id == "crowbar"
+	InventorySystem.has_hammer = _melee_id == "hammer"
+	_active_slot = SLOT_MELEE
+	axe_equipped = true
+	weapon_changed.emit(_melee_display_name())
+	_update_viewmodel()
+	print("CLAUDE: в слоте 3 — ", _melee_display_name())
+
+
+func _melee_display_name() -> String:
+	match _melee_id:
+		"knife": return "Мачете"
+		"crowbar": return "Лом"
+		"hammer": return "Молот"
+		_: return "Топор"
+
+
+func _mag_size_of(index: int) -> int:
+	var base: int = int(weapons[index].magazine_size)
+	return int(round(float(base) * InventorySystem.magazine_mult()))
 
 
 ## Пересобрать параметры текущего оружия при смене навыков (Этап 4.41): урон
@@ -1070,10 +1176,11 @@ func _update_viewmodel() -> void:
 	if _dead:
 		key = ""
 	elif axe_equipped:
-		if InventorySystem.has_hammer: key = "hammer"
-		elif InventorySystem.has_improved_axe: key = "crowbar"
-		elif InventorySystem.has_knife: key = "machete"
-		else: key = "axe"
+		match _melee_id:
+			"hammer": key = "hammer"
+			"crowbar": key = "crowbar"
+			"knife": key = "machete"
+			_: key = "axe"
 	else:
 		key = ["pistol", "dual", "shotgun", "rifle", "sniper"][clampi(current_weapon_index, 0, 4)]
 	for k in _vm:

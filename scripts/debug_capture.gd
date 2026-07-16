@@ -124,30 +124,52 @@ func _run_capture(args: PackedStringArray) -> void:
 		await get_tree().create_timer(player.reload_time + 0.2).timeout
 		print("  player_ammo после перезарядки: ", player.current_ammo, " / ", player.magazine_size)
 
-	# 4.6) Арсенал + покупка оружия (Этап 4.6.2 / 4.7.2; с 4.24 — на чёрном
-	# рынке): в начале только пистолет; остальное покупается за деньги.
-	if is_instance_valid(player) and player.has_method("switch_weapon"):
-		print("CLAUDE: пробую переключиться на оружие №2 ДО покупки")
-		player.switch_weapon(1)
-		print("  текущее оружие (ожидается Пистолет): ", player.weapons[player.current_weapon_index].name)
-		print("CLAUDE: покупаю весь арсенал на чёрном рынке")
-		InventorySystem.add_money(400)  # в тесте денег мало — добавим на весь арсенал
+	# 4.6) Слоты CS + чёрный рынок (Этап 4.44): слот2=пистолет, слот3=топор,
+	# слот1 пуст; рынок только при weapon_basic≥1; покупка с заменой в слоте.
+	if is_instance_valid(player) and player.has_method("switch_slot"):
+		print("CLAUDE: слоты CS (4.44) — старт и переключение")
+		print("  старт: axe=", player.axe_equipped, ", melee=", player._melee_display_name(),
+				", pistol_slot=", player._slot_pistol, ", primary_slot=", player._slot_primary)
+		player.switch_weapon(1)  # двойные ещё не куплены
+		print("  switch на двойные ДО покупки: owns=", player.owns_weapon(1),
+				" (ожид. false), в руках топор=", player.axe_equipped)
+		player.switch_slot(2)
+		print("  слот 2: ", player.weapons[player.current_weapon_index].name,
+				", axe=", player.axe_equipped, " (ожид. Пистолет, false)")
+		player.switch_slot(1)
+		print("  слот 1 пуст: primary=", player._slot_primary, " (ожид. -1)")
+		# Рынок скрыт без навыка.
 		var market_w := get_tree().get_first_node_in_group("black_market")
-		while market_w != null:
+		if is_instance_valid(market_w):
+			market_w._refresh_unlock()
+			print("  рынок без навыка: visible=", market_w.visible, " (ожид. false)")
+		# Открываем навыки и покупаем с заменой в слотах.
+		InventorySystem.skill_levels["weapon_basic"] = 1
+		InventorySystem.skill_levels["weapon_mid"] = 1
+		InventorySystem.skill_levels["weapon_adv"] = 1
+		InventorySystem.skills_changed.emit()
+		if is_instance_valid(market_w):
+			market_w._refresh_unlock()
+			print("  рынок с weapon_basic: visible=", market_w.visible, " (ожид. true)")
+		InventorySystem.add_money(500)
+		print("CLAUDE: покупаю стволы (замена в слоте)")
+		# Двойные → заменяют пистолет в слоте 2; дробовик → слот 1; автомат → замена дробовика.
+		for wi in [1, 2, 3]:
 			var money_before_w := InventorySystem.get_money()
-			if not market_w.buy_weapon():
-				break
-			print("  куплено: ", player.weapons[player.current_weapon_index].name,
-					" | деньги ", money_before_w, " → ", InventorySystem.get_money(), "$")
-		print("CLAUDE: проверяю каждое оружие в арсенале")
-		for wi in player.weapons.size():
-			player.switch_weapon(wi)
-			var w: Dictionary = player.weapons[wi]
-			print("  [", wi + 1, "] ", w.name, " — урон ", player.damage,
-					", обойма ", player.current_ammo, " / ", player.magazine_size,
-					", дальность ", player.shoot_range, ", пуль ", w.get("pellets", 1))
-		print("CLAUDE: возвращаюсь на пистолет")
-		player.switch_weapon(0)
+			var okb: bool = player.buy_weapon(wi)
+			print("  buy ", player.weapons[wi].name, ": ok=", okb,
+					" | деньги ", money_before_w, " → ", InventorySystem.get_money(), "$",
+					" | слоты P=", player._slot_primary, " S=", player._slot_pistol)
+		print("  owns пистолет=", player.owns_weapon(0), " (ожид. false — заменён двойными)")
+		print("  owns дробовик=", player.owns_weapon(2), " (ожид. false — заменён автоматом)")
+		print("  owns автомат=", player.owns_weapon(3), " (ожид. true)")
+		player.switch_slot(1)
+		print("  слот 1: ", player.weapons[player.current_weapon_index].name, " (ожид. Автомат)")
+		player.switch_slot(2)
+		print("  слот 2: ", player.weapons[player.current_weapon_index].name, " (ожид. Двойные)")
+		player.switch_slot(3)
+		print("  слот 3: axe=", player.axe_equipped, " (ожид. true)")
+		player.switch_slot(2)  # вернём пистолетный слот для дальнейших тестов
 
 	# Перед проверкой остальных фич зачищаем оставшихся зомби волны и лечим
 	# игрока — иначе он может случайно погибнуть, пока стоит на месте, и
@@ -771,12 +793,12 @@ func _run_capture(args: PackedStringArray) -> void:
 		# Убираем оставшихся зомби, чтобы они не добивали стену во время замера ремонта.
 		for e0 in get_tree().get_nodes_in_group("enemy"):
 			e0.queue_free()
-		# Экипировка: на старте топор; берём ствол → топор убран; Q → снова топор.
-		print("  axe_equipped на старте: ", player.axe_equipped)
-		player.switch_weapon(0)
-		print("  после взятия ствола axe_equipped: ", player.axe_equipped)
-		player.equip_axe()
-		print("  после Q axe_equipped: ", player.axe_equipped)
+		# Экипировка: слот 3 = ближний бой; слот 2 = пистолетный (Этап 4.44).
+		print("  axe_equipped (слот 3): ", player.axe_equipped)
+		player.switch_slot(2)
+		print("  после слота 2 axe_equipped: ", player.axe_equipped, " (ожид. false)")
+		player.switch_slot(3)
+		print("  после слота 3 axe_equipped: ", player.axe_equipped, " (ожид. true)")
 		# У топора нет патронов/перезарядки: R при топоре не восполняет патроны.
 		player.current_ammo = 3
 		player.reload()
@@ -1232,16 +1254,18 @@ func _run_capture(args: PackedStringArray) -> void:
 			e.queue_free()
 		_dump_state("ПОСЛЕ босса и спецволн (4.13b)")
 
-	# 6.993) Чёрный рынок (Этап 4.24): открывается в одной из нескольких точек,
-	# меняет точку каждый день; рядом покупается оружие за деньги (тест покупки —
-	# в секции 4.6 выше через market.buy_weapon).
+	# 6.993) Чёрный рынок (Этап 4.24/4.44): точки + меню CS (нужен weapon_basic).
 	var market := get_tree().get_first_node_in_group("black_market")
 	if is_instance_valid(market) and market is Node3D:
-		print("CLAUDE: проверяю чёрный рынок (4.24)")
+		print("CLAUDE: проверяю чёрный рынок (4.24/4.44)")
+		# Гарантируем видимость рынка для теста точек/меню.
+		InventorySystem.skill_levels["weapon_basic"] = maxi(
+				InventorySystem.get_skill_level("weapon_basic"), 1)
+		InventorySystem.skills_changed.emit()
+		market._refresh_unlock()
 		var pts: Array = market.spawn_points
 		var pos0: Vector3 = (market as Node3D).global_position
-		print("  стартовая точка рынка: ", pos0, " (из ", pts.size(), " точек), в списке: ", pos0 in pts)
-		# Эмулируем смену дня — точка должна остаться из списка и поменяться.
+		print("  стартовая точка рынка: ", pos0, " (из ", pts.size(), " точек), visible=", market.visible)
 		var changed := 0
 		for i in 5:
 			market._on_phase_changed(false)
@@ -1250,12 +1274,17 @@ func _run_capture(args: PackedStringArray) -> void:
 			pos0 = (market as Node3D).global_position
 		print("  за 5 «новых дней» точка менялась раз: ", changed,
 				", текущая в списке: ", (market as Node3D).global_position in pts)
-		# Ставим игрока перед рынком для визуальной проверки прилавка на скриншоте.
+		var mmenu := get_tree().get_first_node_in_group("market_menu")
+		if is_instance_valid(mmenu) and mmenu.has_method("toggle"):
+			mmenu.toggle()
+			print("  меню рынка открыто: ", mmenu.visible, " (ожид. true)")
+			mmenu.close()
+			print("  меню рынка закрыто: ", not mmenu.visible)
 		if player is Node3D and player.has_method("heal"):
 			player.heal(1000.0)
 			get_tree().paused = false
 			(player as Node3D).global_position = (market as Node3D).global_position + Vector3(0, 1, 4)
-		_dump_state("ПОСЛЕ чёрного рынка (4.24)")
+		_dump_state("ПОСЛЕ чёрного рынка (4.24/4.44)")
 
 	# 6.994) Меню построек (Этап 4.26): по B открывается UI со списком построек
 	# (цена + гейт по тиру); выбор постройки входит в режим постройки.

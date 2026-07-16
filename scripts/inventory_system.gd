@@ -97,9 +97,9 @@ const BRANCH_ORDER := ["combat", "gather", "engineer"]
 #   ready: реализован ли эффект (false → в UI помечается «скоро»).
 const SKILLS := {
 	# --- Бой ---
-	"weapon_basic":     {"branch": "combat", "name": "Мастер оружия (нач.)", "icon": "pistol", "max": 3, "kind": "normal", "ready": true, "desc": "Пистолеты: урон +10%/ур; цена −15%/ур."},
-	"weapon_mid":       {"branch": "combat", "name": "Мастер оружия (средн.)", "icon": "rifle", "max": 3, "kind": "normal", "ready": true, "desc": "Дробовик/снайперка: урон +10%/ур; цена −20%/ур."},
-	"weapon_adv":       {"branch": "combat", "name": "Мастер оружия (продв.)", "icon": "mg", "max": 3, "kind": "normal", "ready": true, "desc": "Автомат: урон +10%/ур; цена −25%/ур."},
+	"weapon_basic":     {"branch": "combat", "name": "Мастер оружия (нач.)", "icon": "pistol", "max": 3, "kind": "normal", "ready": true, "desc": "Открывает чёрный рынок и двойные пистолеты. Урон +10%/ур; цена −15%/ур."},
+	"weapon_mid":       {"branch": "combat", "name": "Мастер оружия (средн.)", "icon": "rifle", "max": 3, "kind": "normal", "ready": true, "desc": "Открывает дробовик/снайперку. Урон +10%/ур; цена −20%/ур."},
+	"weapon_adv":       {"branch": "combat", "name": "Мастер оружия (продв.)", "icon": "mg", "max": 3, "kind": "normal", "ready": true, "desc": "Открывает автомат. Урон +10%/ур; цена −25%/ур."},
 	"combat_reinforce": {"branch": "combat", "name": "Боевое подкрепление", "icon": "magazine", "max": 1, "kind": "normal", "ready": true, "desc": "Ёмкость магазина +50%."},
 	"combat_mastery":   {"branch": "combat", "name": "Боевое мастерство", "icon": "swords", "max": 1, "kind": "mastery", "ready": true, "desc": "Класс «Боец». На верстаке доступно Мачете."},
 	"battlefield_expert": {"branch": "combat", "name": "Эксперт на поле боя", "icon": "ghost", "max": 2, "kind": "normal", "ready": true, "desc": "При HP ≤30% авто-невидимость 5/7 c (кулдаун)."},

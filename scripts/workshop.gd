@@ -154,7 +154,12 @@ func _craft_tool(tool: String) -> bool:
 		return false
 	InventorySystem.use_resource("wood", cost.wood)
 	InventorySystem.use_resource("steel", cost.steel)
-	InventorySystem.set(spec.flag, true)
+	# Слот 3 CS (Этап 4.44): инструмент ЗАМЕНЯЕТ топор; флаги/баффы — через player.
+	var player := get_tree().get_first_node_in_group("player")
+	if is_instance_valid(player) and player.has_method("equip_melee_tool"):
+		player.equip_melee_tool(tool)
+	else:
+		InventorySystem.set(spec.flag, true)
 	print("Мастерская: скрафтили «", spec.title, "»")
 	return true
 

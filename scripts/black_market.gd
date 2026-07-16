@@ -1,10 +1,9 @@
 extends Area3D
 
-## Чёрный рынок (Этап 4.24). Как в оригинале (New Zombie Shelter): открывается
-## каждый день в ОДНОЙ ИЗ НЕСКОЛЬКИХ точек. Рядом с ним за ДЕНЬГИ покупается
-## оружие (player.weapons по возрастанию цены). Деньги тратятся только здесь —
-## постройки/крафт/ремонт идут за ресурсы.
-##   Игрок внутри зоны + [F] — купить следующий ствол.
+## Чёрный рынок (Этап 4.24 → 4.44). Открывается каждый день в одной из точек.
+## Появляется только при навыке «Мастер оружия (нач.)» ≥ 1. Рядом с прилавком
+## [F] открывает CS-меню покупки (market_menu.gd): категории пистолеты/основное,
+## покупка заменяет ствол в слоте. Деньги тратятся только здесь.
 
 @export var spawn_points: Array[Vector3] = [
 	Vector3(12, 0, 0),
@@ -15,6 +14,7 @@ extends Area3D
 var _player_inside: bool = false
 var _capture_mode: bool = false
 var _current_point: int = -1
+var _unlocked: bool = false
 
 @onready var prompt: Label3D = $Prompt
 
@@ -25,10 +25,10 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 	_relocate()
-	# Каждый новый день рынок переезжает в случайную точку — подключаемся
-	# отложенно, когда цикл день/ночь уже в группе.
 	_connect_day_cycle.call_deferred()
-	_update_prompt()
+	InventorySystem.skills_changed.connect(_refresh_unlock)
+	# Игрок может ещё не быть в группе в момент _ready — обновим на следующем кадре.
+	_refresh_unlock.call_deferred()
 
 
 func _connect_day_cycle() -> void:
@@ -39,20 +39,35 @@ func _connect_day_cycle() -> void:
 
 func _on_phase_changed(is_night: bool) -> void:
 	if not is_night:
-		_relocate()  # наступил день — рынок открывается в новой случайной точке
+		_relocate()
+		_refresh_unlock()
 
 
 ## Переставить рынок в случайную из точек (Этап 4.24).
 func _relocate() -> void:
 	if spawn_points.is_empty():
 		return
-	# По возможности выбираем точку, отличную от текущей.
 	var idx := randi() % spawn_points.size()
 	if spawn_points.size() > 1 and idx == _current_point:
 		idx = (idx + 1) % spawn_points.size()
 	_current_point = idx
 	global_position = spawn_points[idx]
 	print("Чёрный рынок открылся в точке ", idx, " ", spawn_points[idx])
+
+
+## Рынок виден только при weapon_basic ≥ 1 (Этап 4.44).
+func _refresh_unlock() -> void:
+	var p := get_tree().get_first_node_in_group("player")
+	_unlocked = is_instance_valid(p) and p.has_method("can_see_black_market") \
+			and p.can_see_black_market()
+	visible = _unlocked
+	monitoring = _unlocked
+	if not _unlocked:
+		_player_inside = false
+		var menu := get_tree().get_first_node_in_group("market_menu")
+		if is_instance_valid(menu) and menu.has_method("close"):
+			menu.close()
+	_update_prompt()
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -65,48 +80,47 @@ func _on_body_exited(body: Node3D) -> void:
 	if body.is_in_group("player"):
 		_player_inside = false
 		_update_prompt()
+		var menu := get_tree().get_first_node_in_group("market_menu")
+		if is_instance_valid(menu) and menu.has_method("close"):
+			menu.close()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _capture_mode or not _player_inside:
+	if _capture_mode or not _unlocked or not _player_inside:
 		return
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
-		buy_weapon()
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
+		var menu := get_tree().get_first_node_in_group("market_menu")
+		if is_instance_valid(menu) and menu.has_method("toggle"):
+			menu.toggle()
+			get_viewport().set_input_as_handled()
 
 
-## Покупка следующего оружия за деньги (Этап 4.24): логика/цены — в player.gd.
+## Совместимость с тестами: купить следующий доступный ствол (без UI).
 func buy_weapon() -> bool:
+	if not _unlocked:
+		print("Чёрный рынок: закрыт (нужен навык «Мастер оружия (нач.)»)")
+		return false
 	var player := get_tree().get_first_node_in_group("player")
 	if not is_instance_valid(player) or not player.has_method("buy_weapon"):
 		return false
 	var index: int = player.next_unowned_weapon_index()
 	if index < 0:
-		print("Чёрный рынок: всё оружие уже куплено")
+		print("Чёрный рынок: нечего покупать (всё доступное уже в слотах или закрыто навыком)")
 		return false
 	var ok: bool = player.buy_weapon(index)
 	_update_prompt()
 	return ok
 
 
-## Подсказка над прилавком: ярче, когда игрок рядом.
 func _update_prompt() -> void:
 	if prompt == null:
 		return
+	prompt.visible = _unlocked
+	if not _unlocked:
+		return
 	if _player_inside:
-		prompt.text = "ЧЁРНЫЙ РЫНОК\n[F] купить: %s" % _weapon_offer_text()
+		prompt.text = "ЧЁРНЫЙ РЫНОК\n[F] меню покупки"
 		prompt.modulate = Color(1, 0.45, 0.45)
 	else:
 		prompt.text = "Чёрный рынок\n(подойдите ближе)"
 		prompt.modulate = Color(0.7, 0.45, 0.45)
-
-
-## Текст предложения оружия: следующий ствол + цена.
-func _weapon_offer_text() -> String:
-	var player := get_tree().get_first_node_in_group("player")
-	if is_instance_valid(player) and player.has_method("next_unowned_weapon_index"):
-		var index: int = player.next_unowned_weapon_index()
-		if index < 0:
-			return "всё куплено"
-		var w: Dictionary = player.weapons[index]
-		return "%s (%d$)" % [w.name, player.get_weapon_price(index)]
-	return "оружие"

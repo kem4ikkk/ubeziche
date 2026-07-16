@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" path="res://scenes/build_menu.tscn" id="13_buildmenu"]
 [ext_resource type="PackedScene" path="res://scenes/workshop_menu.tscn" id="14_wsmenu"]
 [ext_resource type="PackedScene" path="res://scenes/warehouse_menu.tscn" id="14b_whmenu"]
+[ext_resource type="PackedScene" path="res://scenes/market_menu.tscn" id="14c_mmenu"]
 [ext_resource type="Script" path="res://scripts/resource_spawner.gd" id="15_resspawn"]
 [ext_resource type="PackedScene" path="res://scenes/resource_node.tscn" id="16_resnode"]
 [ext_resource type="PackedScene" path="res://scenes/blastable_segment.tscn" id="18_blastseg"]
@@ -205,6 +206,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 5)
 [node name="WorkshopMenu" parent="." instance=ExtResource("14_wsmenu")]
 
 [node name="WarehouseMenu" parent="." instance=ExtResource("14b_whmenu")]
+
+[node name="MarketMenu" parent="." instance=ExtResource("14c_mmenu")]
 
 [node name="BlastableSegment" parent="." instance=ExtResource("18_blastseg")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 0, 40)

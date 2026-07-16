@@ -10,12 +10,16 @@ extends CanvasLayer
 var _capture_mode := false
 var _build_system: Node
 
-## Иконка-«фотка» для каждой постройки (файлы в assets/icons, рисует gen_skill_icons.py).
+## Иконка-«фотка» для каждой постройки (файлы в assets/icons, рисует gen_font_icons.py).
+## «Склад» → factory (склад-здание): иконки warehouse нет, был пустой блок.
 const ICON := {
 	"Стена": "bricks", "Мастерская": "toolcross", "Генератор": "generator",
 	"Турель": "turret", "Лазарет": "medkit", "Костёр": "campfire",
-	"Мортира": "mortar", "Гатлинг": "mg", "Склад": "warehouse",
+	"Мортира": "mortar", "Гатлинг": "mg", "Склад": "factory",
 }
+
+## Иконка ресурса для строки стоимости (иконка + количество).
+const RES_ICON := {"wood": "wood", "steel": "steel", "wall": "bricks"}
 
 
 func _ready() -> void:
@@ -87,17 +91,17 @@ func _rebuild() -> void:
 	_list.add_child(exit_btn)
 
 
-## Карточка постройки: фон-кнопка + название (верх) + иконка (центр) + стоимость/
-## доступность (низ). Заблокированные (тир/ресурсы) — затемнены и некликабельны.
+## Карточка постройки: название (верх) + иконка (центр) + стоимость иконками
+## (иконка ресурса + число, низ). Доступные — яркие; недоступные (тир/ресурсы) —
+## затемнены. Кнопка ВСЕГДА активна: у недоступной клик не строит, а показывает
+## маленькую подсказку-причину (Этап UI-6, правка автора).
 func _make_card(b: Dictionary) -> Control:
-	var min_tier: int = int(b.get("min_tier", 1))
-	var locked: bool = InventorySystem.shelter_tier < min_tier
-	var poor: bool = not locked and not _can_afford(b.cost)
+	var available: bool = _is_available(b)
 
 	var card := Button.new()
-	card.custom_minimum_size = Vector2(130, 118)
-	card.disabled = locked or poor
-	card.pressed.connect(_on_pick.bind(b.name))
+	card.custom_minimum_size = Vector2(130, 122)
+	# Яркость: доступные — во всю яркость, недоступные — приглушены.
+	card.modulate = Color(1, 1, 1, 1.0) if available else Color(1, 1, 1, 0.4)
 
 	var v := VBoxContainer.new()
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -118,29 +122,64 @@ func _make_card(b: Dictionary) -> Control:
 	ic.texture = _icon_for(b.name)
 	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	ic.custom_minimum_size = Vector2(46, 46)
+	ic.custom_minimum_size = Vector2(44, 44)
 	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(ic)
 
-	var info := Label.new()
-	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	info.add_theme_font_size_override("font_size", 12)
-	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if locked:
-		info.text = "нужен Тир %d" % min_tier
-		info.add_theme_color_override("font_color", UiStyle.BAD)
-	elif poor:
-		info.text = _deficit_text(b.cost)
-		info.add_theme_color_override("font_color", UiStyle.BAD)
-	else:
-		info.text = _cost_text(b.cost)
-		info.add_theme_color_override("font_color", UiStyle.MUTED)
-	v.add_child(info)
+	# Стоимость: иконка ресурса + количество (вместо текстовой строки).
+	v.add_child(_cost_row(b.cost))
 
-	if card.disabled:
-		card.modulate = Color(1, 1, 1, 0.5)
+	# Скрытая подсказка-причина — «высвечивается» по клику на недоступную карточку.
+	var hint := Label.new()
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", UiStyle.BAD)
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.visible = false
+	v.add_child(hint)
+
+	card.pressed.connect(_on_card_pressed.bind(b, hint))
 	return card
+
+
+## Строка стоимости: для каждого ресурса — [иконка + число]. Фиксированный порядок
+## дерево→сталь, чтобы карточки выглядели единообразно.
+func _cost_row(cost: Dictionary) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for r in ["wood", "steel", "wall"]:
+		if not cost.has(r):
+			continue
+		var cell := HBoxContainer.new()
+		cell.add_theme_constant_override("separation", 3)
+		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(_res_icon_rect(r, 18))
+		var amount := Label.new()
+		amount.text = str(int(cost[r]))
+		amount.add_theme_font_size_override("font_size", 14)
+		amount.add_theme_color_override("font_color", UiStyle.TEXT)
+		amount.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		amount.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(amount)
+		row.add_child(cell)
+	return row
+
+
+## Иконка ресурса (белый монохром-глиф; тонируется цветом при желании).
+func _res_icon_rect(r: String, sz: int) -> TextureRect:
+	var t := TextureRect.new()
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.custom_minimum_size = Vector2(sz, sz)
+	t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var path := "res://assets/icons/%s.png" % RES_ICON.get(r, r)
+	if ResourceLoader.exists(path):
+		t.texture = load(path)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return t
 
 
 ## Текстура-иконка постройки (или null, если не задана/не найдена).
@@ -148,6 +187,28 @@ func _icon_for(building_name: String) -> Texture2D:
 	var key: String = ICON.get(building_name, "")
 	var path := "res://assets/icons/%s.png" % key
 	return load(path) if key != "" and ResourceLoader.exists(path) else null
+
+
+## Доступна ли постройка сейчас (открыт тир И хватает ресурсов рюкзак+склад).
+func _is_available(b: Dictionary) -> bool:
+	if InventorySystem.shelter_tier < int(b.get("min_tier", 1)):
+		return false
+	return _can_afford(b.cost)
+
+
+## Клик по карточке: доступную — строим и закрываем меню; недоступную — не строим,
+## а «высвечиваем» маленькую подсказку с причиной (тир/ресурсы).
+func _on_card_pressed(b: Dictionary, hint: Label) -> void:
+	var min_tier: int = int(b.get("min_tier", 1))
+	if InventorySystem.shelter_tier < min_tier:
+		hint.text = "нужен Тир %d" % min_tier
+		hint.visible = true
+		return
+	if not _can_afford(b.cost):
+		hint.text = "не хватает ресурсов"
+		hint.visible = true
+		return
+	_on_pick(b.name)
 
 
 ## Выбрать постройку: входим в режим постройки и закрываем меню (ЛКМ ставит).
@@ -168,34 +229,9 @@ func _on_exit_build() -> void:
 	toggle()
 
 
-## Хватает ли ресурсов на постройку (Этап 4.31): чтобы гасить кнопку в меню.
+## Хватает ли ресурсов (рюкзак + склад) на постройку.
 func _can_afford(cost: Dictionary) -> bool:
 	for r in cost:
 		if InventorySystem.get_total_resource(r) < int(cost[r]):
 			return false
 	return true
-
-
-func _cost_text(cost: Dictionary) -> String:
-	var parts: Array[String] = []
-	for r in cost:
-		parts.append("%s %d" % [_res_name(r), int(cost[r])])
-	return ", ".join(parts)
-
-
-## Чего и сколько не хватает на постройку (красным в карточке, Этап UI-5).
-func _deficit_text(cost: Dictionary) -> String:
-	var parts: Array[String] = []
-	for r in cost:
-		var miss: int = int(cost[r]) - InventorySystem.get_total_resource(r)
-		if miss > 0:
-			parts.append("%d %s" % [miss, _res_name(r)])
-	return "не хватает: " + ", ".join(parts)
-
-
-func _res_name(r: String) -> String:
-	match r:
-		"wood": return "дерево"
-		"steel": return "сталь"
-		"wall": return "стена"
-	return r
